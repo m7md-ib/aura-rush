@@ -9,6 +9,7 @@
 <meta property="og:description" content="مين ملك الـAURA؟ العب وتحدى صحابك.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@400;700;800&display=swap">
+<link rel="stylesheet" href="cosmetics.css">
 <style>
 /* Layout: one-screen arcade — HUD strip + level bar on top, play field fills the rest, FLEX button under it */
 :root{
@@ -166,6 +167,37 @@ input{-webkit-user-select:text;user-select:text}
 .acct-me{display:grid;gap:10px;justify-items:center}
 .acct-me p{margin:0;font-size:17px}
 .save-hint{margin:0;font-size:13px;color:var(--muted);max-width:32ch}
+/* ---- coins + shop ---- */
+.coin{display:inline-block;width:.95em;height:.95em;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff3c4,#ffc94d 45%,#e0a21f);box-shadow:inset 0 0 0 2px rgba(224,162,31,.9);vertical-align:-.12em}
+.coins-in{margin-inline-start:6px;color:var(--gold)}
+.coins-in b{font-family:var(--display);font-weight:400;margin-inline-start:4px}
+.coins-big{display:flex;align-items:center;gap:6px;font-family:var(--display);font-size:26px;color:var(--gold);background:var(--ink2);border:1px solid var(--gold);border-radius:12px;padding:4px 12px}
+.shop-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center}
+.shop-note{margin:0;font-size:14px;color:var(--muted);max-width:36ch;min-height:1.2em}
+.reward-note{margin:0;font-size:14px;font-weight:800;color:var(--ink);background:var(--cyan);border-radius:10px;padding:6px 12px;max-width:34ch}
+.btn.daily{animation:dailyPulse 1.6s ease-in-out infinite alternate}
+@keyframes dailyPulse{to{box-shadow:0 0 34px rgba(255,201,77,.75)}}
+.shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;width:min(620px,100%)}
+.item{display:grid;gap:4px;justify-items:center;background:var(--ink2);border:1px solid var(--line);border-radius:14px;padding:8px 8px 10px;text-align:center;min-width:0}
+.item.on{box-shadow:0 0 0 2px var(--cyan),0 0 18px rgba(110,231,255,.3)}
+.item.r-rare{border-color:rgba(110,231,255,.45)} .item.r-legendary{border-color:rgba(255,201,77,.6)} .item.r-mythic{border-color:rgba(255,95,210,.7);background:linear-gradient(180deg,rgba(255,95,210,.1),var(--ink2) 60%)}
+.item .pv{width:100%;height:96px;border-radius:10px;background:rgba(0,0,0,.18);display:block}
+.item .pv-name{display:grid;place-items:center;font:800 19px var(--body);overflow:hidden;white-space:nowrap}
+.item .pv-sw{border:1px solid var(--line);box-sizing:border-box}
+.item .pv-frame{background:var(--ink)}
+.item .iname{font-family:var(--display);font-weight:400;font-size:17px;line-height:1.1}
+.item .rar{font-size:11px;font-weight:800;color:var(--muted)}
+.item.r-rare .rar{color:var(--cyan)} .item.r-legendary .rar{color:var(--gold)} .item.r-mythic .rar{color:#ff5fd2}
+.ibtn{font:800 14px var(--body);border-radius:10px;padding:7px 10px;border:1px solid var(--line);background:var(--ink);color:var(--text);cursor:pointer;width:100%;touch-action:manipulation}
+.ibtn.price{color:var(--gold);border-color:rgba(255,201,77,.5)}
+.ibtn.price.poor{opacity:.55}
+.ibtn.confirm{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+.ibtn.wear{background:var(--cyan);color:var(--ink);border-color:var(--cyan)}
+.ibtn.off{color:var(--muted)}
+.ibtn.locked{font-size:12px;color:var(--muted);cursor:default}
+.ibtn:disabled{cursor:default}
+.board li .n .vf{margin-inline-end:4px}
+@media (prefers-reduced-motion: reduce){.btn.daily{animation:none}}
 </style>
 </head>
 <body>
@@ -192,6 +224,15 @@ input{-webkit-user-select:text;user-select:text}
       <div class="rank">الإنجازات</div>
       <ul class="ach-list" id="achList"></ul>
       <button class="btn ghost" id="achBack">رجوع</button>
+    </div>
+
+    <div class="overlay" id="shopScreen" hidden>
+      <div class="shop-head"><div class="rank">المتجر</div><div class="coins-big"><i class="coin"></i><b id="shopCoins">0</b></div></div>
+      <p class="shop-note" id="shopNote" role="status"></p>
+      <button class="btn small" id="shopLogin" type="button" hidden>سجّل حساب / ادخل</button>
+      <div class="tabs2" id="shopTabs" role="group" aria-label="أقسام المتجر"></div>
+      <div class="shop-grid" id="shopGrid"></div>
+      <button class="btn ghost" id="shopBack" type="button">رجوع</button>
     </div>
 
     <div class="overlay" id="acctScreen" hidden>
@@ -243,7 +284,12 @@ input{-webkit-user-select:text;user-select:text}
       </div>
       <div class="nick-row" id="nickRow"><label for="nick">اسمك على العرش</label><input id="nick" maxlength="16" placeholder="مثلاً: سيغما_جو" autocomplete="off"></div>
       <p class="who" id="whoRow" hidden>بتلعب باسم <span class="vf" aria-hidden="true">✓</span><b id="whoName"></b></p>
-      <button class="btn ghost small" id="acctBtn" type="button">سجّل حساب / ادخل</button>
+      <p class="reward-note" id="rewardNote" role="status" hidden></p>
+      <div class="links">
+        <button class="btn ghost small" id="acctBtn" type="button">سجّل حساب / ادخل</button>
+        <button class="btn ghost small" id="shopBtn" type="button">المتجر <span class="coins-in" hidden><i class="coin"></i><b id="coinsTop">0</b></span></button>
+      </div>
+      <button class="btn small daily" id="dailyBtn" type="button" hidden>🎁 استلم مكافأة اليوم</button>
       <div class="chars" id="chars" role="group" aria-label="الشخصية"></div>
       <p class="char-desc" id="charDesc"></p>
       <div class="nick-row"><label for="titleSel">لقبك</label><select id="titleSel"></select></div>
@@ -282,6 +328,7 @@ input{-webkit-user-select:text;user-select:text}
   <button id="flex" dir="ltr"><span class="charge" id="flexCharge"></span><span class="lbl" id="flexLabel">FLEX</span></button>
 </div>
 
+<script src="cosmetics.js" defer></script>
 <script src="game.js" defer></script>
 </body>
 </html>

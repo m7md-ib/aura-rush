@@ -7,6 +7,7 @@
 <meta name="description" content="أفضل 100 لاعب بـ Aura Rush.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@400;700;800&display=swap">
+<link rel="stylesheet" href="cosmetics.css">
 <style>
 /* Layout: arcade scoreboard — title + stat strip, podium for top 3, then the ranked table */
 :root{
@@ -131,7 +132,9 @@ function el(tag, cls, text){ const e = document.createElement(tag); if (cls) e.c
 function nameNode(r){
   if (!r.verified) return document.createTextNode(String(r.nick || 'لاعب مجهول').replace(/[✓✔☑✅]/g, ''));
   const a = el('a', 'pl'); a.href = '/profile?u=' + encodeURIComponent(r.nick);
-  const v = el('span', 'vf', '✓'); v.title = 'حساب مسجّل'; a.append(v, r.nick);
+  const v = el('span', 'vf', '✓'); v.title = 'حساب مسجّل';
+  const fx = /^nm_[a-z]+$/.test(r.name_fx || '') ? 'nm-' + r.name_fx.slice(3) : '';   // name effect bought in the shop
+  a.append(v, el('span', fx, r.nick));
   return a;
 }
 
@@ -165,7 +168,7 @@ function render(rows){
 async function load(){
   try {
     const [rows, stats, mine] = await Promise.all([
-      rpc('get_leaderboard_v3', { p_limit:100, p_player:me, p_period:period, p_token:token }),
+      rpc('get_leaderboard_v4', { p_limit:100, p_player:me, p_period:period, p_token:token }),
       rpc('get_stats', {}),
       (me || token) ? rpc('get_my_rank_v3', { p_player:me, p_period:period, p_token:token }) : Promise.resolve(null)
     ]);

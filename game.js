@@ -246,8 +246,15 @@ const AUTH_ERR = [
 const authMsg = e => (AUTH_ERR.find(([re]) => re.test(e && e.message || '')) || [0, 'في مشكلة بالنت. جرّب كمان مرة'])[1];
 const Acct = {
   token: store.get('auraToken', null), user: store.get('auraUser', null),
+  coins: 0, eq: {}, dailyReady: false, streak: 0, weeklyDone: false,
   get signedIn(){ return !!(this.token && this.user); },
-  set(token, user){ this.token = token || null; this.user = token ? user : null; store.set('auraToken', this.token); store.set('auraUser', this.user); renderAcct(); },
+  set(token, user){ this.token = token || null; this.user = token ? user : null; store.set('auraToken', this.token); store.set('auraUser', this.user); if (!token){ this.coins = 0; this.eq = {}; this.dailyReady = false; } renderAcct(); },
+  setCoins(n){ if (n != null){ this.coins = n; renderAcct(); } },
+  /* last week's top 10 get coins; checked once per page load */
+  async weekly(){
+    if (this.weeklyDone || !this.signedIn) return; this.weeklyDone = true;
+    try { const w = await rpc('claim_weekly', { p_token:this.token }); if (w && w.reward > 0){ this.setCoins(w.coins); note('مبروك! طلعت #' + w.rank + ' الأسبوع الماضي: +' + w.reward + ' عملة'); } } catch(e){}
+  },
   /* who am I + achievements. First run after this update: import the achievements this device earned before accounts existed. */
   async sync(){
     try {
@@ -259,6 +266,7 @@ const Acct = {
       const m = await rpc('me', { p_token:this.token, p_player:UID });
       if (this.token && !m.signed_in) this.set(null);
       else if (m.signed_in && m.username !== this.user) this.set(this.token, m.username);
+      if (m.signed_in){ this.eq = m.equipped || {}; this.dailyReady = !!m.daily_ready; this.streak = m.streak || 0; this.setCoins(m.coins || 0); this.weekly(); }
       Ach.setServer(m.achievements);
     } catch(e){}
   },
@@ -273,8 +281,8 @@ const Board = {
   local(){ return store.get('auraBoard', []); },
   async refresh(){
     try {
-      const rows = await rpc('get_leaderboard_v3', { p_limit:100, p_player:this.uid, p_period:'all', p_token:Acct.token });
-      this.rows = (rows || []).map(r => ({ nick:String(r.nick || '').slice(0,16), score:Math.max(0, +r.score || 0), level:+r.level || 1, isMe:!!r.is_me, title:String(r.title || '').slice(0,24), verified:!!r.verified }));
+      const rows = await rpc('get_leaderboard_v4', { p_limit:100, p_player:this.uid, p_period:'all', p_token:Acct.token });
+      this.rows = (rows || []).map(r => ({ nick:String(r.nick || '').slice(0,16), score:Math.max(0, +r.score || 0), level:+r.level || 1, isMe:!!r.is_me, title:String(r.title || '').slice(0,24), verified:!!r.verified, fx:r.name_fx || '' }));
       this.me = await rpc('get_my_rank_v3', { p_player:this.uid, p_period:'all', p_token:Acct.token });
       this.shared = true;
     } catch(e){ this.shared = false; }
@@ -287,8 +295,10 @@ const Board = {
       const r = await rpc('submit_score_v3', { p_player:this.uid, p_token:Acct.token, p_nick:entry.nick, p_score:entry.score, p_level:entry.level, p_bosses:entry.bosses,
         p_duration:entry.duration, p_character:entry.character, p_title:entry.title || null, p_achs:entry.claims || [], p_near:entry.near || 0 });
       if (r && r.achievements) Ach.setServer(r.achievements);
+      if (r && r.coins != null) Acct.setCoins(r.coins);
       await this.refresh();
-      return { status: r && r.new_best ? 'ok' : 'notbest', rank: r && r.rank, fresh: (r && r.new_achievements) || [] };
+      return { status: r && r.new_best ? 'ok' : 'notbest', rank: r && r.rank, fresh: (r && r.new_achievements) || [],
+        earned: r ? (r.coins_run || 0) + (r.coins_ach || 0) : 0, capHit: !!(r && r.daily_cap_hit) };
     } catch(e){
       return { status: /plausible|too fast|bad /.test(e.message) ? 'rejected' : /too many/.test(e.message) ? 'slow' : 'local', fresh:[] };
     }
@@ -331,9 +341,11 @@ function renderBoards(){
     rows.slice(0, useShared ? max : 5).forEach((r, i) => {
       const li = document.createElement('li'); if (useShared && r.isMe) li.className = 'me';
       const nick = r.verified ? r.nick : String(r.nick || '').replace(/[✓✔☑✅]/g, '');   // only real accounts get the badge
-      const cells = [['p', i === 0 ? '♛' : String(i+1)], ['n', (nick || 'لاعب مجهول') + (r.title ? ' «' + r.title + '»' : '')], ['lv', 'م' + r.level], ['s', String(r.score)]];
+      const cells = [['p', i === 0 ? '♛' : String(i+1)], ['n', ''], ['lv', 'م' + r.level], ['s', String(r.score)]];
       cells.forEach(([c, t]) => { const s = document.createElement('span'); s.className = c; s.textContent = t; li.appendChild(s); });
-      if (useShared && r.verified){ const v = document.createElement('b'); v.className = 'vf'; v.textContent = '✓'; v.title = 'حساب مسجّل'; li.children[1].prepend(v); }
+      const n = li.children[1], nm = document.createElement('span'); nm.textContent = nick || 'لاعب مجهول';
+      if (useShared && r.verified){ const v = document.createElement('b'); v.className = 'vf'; v.textContent = '✓'; v.title = 'حساب مسجّل'; n.appendChild(v); if (r.fx) nm.className = AuraCos.nameClass(r.fx); }
+      n.appendChild(nm); if (r.title) n.appendChild(document.createTextNode(' «' + r.title + '»'));
       ol.appendChild(li);
     });
     el.appendChild(ol);
@@ -427,8 +439,102 @@ function renderAcct(){
   $('nickRow').hidden = on; $('whoRow').hidden = !on; if (on) $('whoName').textContent = Acct.user;
   $('acctBtn').textContent = on ? 'حسابي' : 'سجّل حساب / ادخل';
   $('saveBtn').hidden = on; $('saveHint').hidden = on;
+  const c = Acct.coins.toLocaleString('en-US');
+  $('coinsTop').textContent = c; $('coinsTop').parentElement.hidden = !on; $('shopCoins').textContent = c;
+  $('dailyBtn').hidden = !(on && Acct.dailyReady);
 }
 renderAcct();
+/* one-line message on the start screen (rewards etc.) */
+function note(txt){ const n = $('rewardNote'); n.textContent = txt; n.hidden = !txt; }
+
+/* ---------- daily reward ---------- */
+$('dailyBtn').addEventListener('click', async () => {
+  const b = $('dailyBtn'); b.disabled = true;
+  try {
+    const r = await rpc('claim_daily', { p_token:Acct.token });
+    Acct.dailyReady = false; if (r){ Acct.streak = r.streak || Acct.streak; Acct.setCoins(r.coins); }
+    if (r && r.claimed) note('+' + r.reward + ' عملة' + (r.streak > 1 ? ' · صارلك ' + r.streak + ' أيام ورا بعض 🔥' : '') + '. ارجع بكرا عشان تزيد!');
+    renderAcct(); Sound.refund();
+  } catch(e){ note(authMsg(e)); }
+  b.disabled = false;
+});
+
+/* ---------- shop ---------- */
+const Shop = { items:[], tab:'wear', from:null, anim:null, frames:[] };
+const SHOP_ERR = { 'not enough coins':'ما معك عملات كفاية. العب أكثر وارجع!', 'already owned':'هاد عندك أصلاً', 'not for sale':'هاد حصري، ما بنباع', 'not signed in':'لازم تدخل على حسابك', 'not owned':'لازم تشتريه أول' };
+const shopErr = e => { const m = String(e && e.message || ''); const k = Object.keys(SHOP_ERR).find(k => m.includes(k)); return k ? SHOP_ERR[k] : 'في مشكلة بالنت. جرّب كمان مرة'; };
+function stopShopAnim(){ if (Shop.anim) cancelAnimationFrame(Shop.anim); Shop.anim = null; Shop.frames = []; }
+async function openShop(){
+  Shop.from = [...document.querySelectorAll('#stage .overlay')].find(o => !o.hidden && o.id !== 'shopScreen') || $('startScreen');
+  Shop.from.hidden = true; $('shopScreen').hidden = false; $('shopScreen').scrollTop = 0;
+  $('shopNote').textContent = Acct.signedIn ? 'كل الأغراض شكل بس: ما بتغيّر اللعب ولا النقاط.' : 'سجّل حساب عشان تجمع عملات من اللعب وتشتري.';
+  $('shopLogin').hidden = Acct.signedIn;
+  $('shopGrid').textContent = ''; $('shopGrid').append(Object.assign(document.createElement('p'), { className:'empty', textContent:'عم نحمّل المتجر...' }));
+  renderShopTabs();
+  try { const d = await rpc('get_shop', { p_token:Acct.token }); Shop.items = (d && d.items) || []; if (d && d.coins != null) Acct.setCoins(d.coins); }
+  catch(e){ $('shopGrid').textContent = ''; $('shopGrid').append(Object.assign(document.createElement('p'), { className:'empty', textContent:'ما قدرنا نفتح المتجر. جرّب كمان شوي.' })); return; }
+  renderShop();
+  $('shopBack').focus({ preventScroll:true });
+}
+function closeShop(){ stopShopAnim(); $('shopScreen').hidden = true; (Shop.from || $('startScreen')).hidden = false; }
+function renderShopTabs(){
+  const el = $('shopTabs'); el.textContent = '';
+  AuraCos.TABS.forEach(tb => { const b = document.createElement('button'); b.type = 'button'; b.textContent = tb.name; b.setAttribute('aria-pressed', String(tb.id === Shop.tab));
+    b.addEventListener('click', () => { Shop.tab = tb.id; renderShopTabs(); renderShop(); }); el.appendChild(b); });
+}
+function renderShop(){
+  stopShopAnim();
+  const grid = $('shopGrid'); grid.textContent = '';
+  const slots = AuraCos.TABS.find(tb => tb.id === Shop.tab).slots;
+  Shop.items.filter(it => slots.includes(it.slot)).forEach(it => {
+    const card = document.createElement('div'); card.className = 'item r-' + it.rarity + (it.equipped ? ' on' : '');
+    let pv;
+    if (it.slot === 'name'){ pv = document.createElement('div'); pv.className = 'pv pv-name'; const s = document.createElement('span'); s.className = AuraCos.nameClass(it.id); s.textContent = Acct.user || 'اسمك'; pv.appendChild(s); }
+    else if (it.slot === 'frame' || it.slot === 'banner'){ pv = document.createElement('div'); pv.className = 'pv pv-sw ' + (it.slot === 'frame' ? 'pv-frame fr-' : 'bn-') + it.id.replace(/^(fr|bn)_/, ''); }
+    else { pv = document.createElement('canvas'); pv.className = 'pv'; }
+    const nm = document.createElement('b'); nm.className = 'iname'; nm.textContent = it.name;
+    const rar = document.createElement('span'); rar.className = 'rar'; rar.textContent = AuraCos.RARITY[it.rarity].name + ' · ' + AuraCos.SLOTS[it.slot];
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'ibtn';
+    if (it.owned){ btn.textContent = it.equipped ? 'اشلحه' : 'البسه'; btn.classList.add(it.equipped ? 'off' : 'wear'); btn.addEventListener('click', () => equip(it, btn)); }
+    else if (it.price == null){ const a = ACH.find(x => x.id === it.unlock_ach); btn.textContent = 'حصري: ' + (a ? a.name : 'إنجاز'); btn.disabled = true; btn.classList.add('locked'); }
+    else { btn.innerHTML = ''; btn.append(Object.assign(document.createElement('i'), { className:'coin' }), document.createTextNode(' ' + it.price.toLocaleString('en-US'))); btn.classList.add('price');
+      if (Acct.signedIn && Acct.coins < it.price) btn.classList.add('poor');
+      btn.addEventListener('click', () => buy(it, btn)); }
+    card.append(pv, nm, rar, btn); grid.appendChild(card);
+    if (pv.tagName === 'CANVAS') Shop.frames.push(AuraCos.preview(pv, it));
+  });
+  if (Shop.frames.length){
+    let lastT = 0;
+    const tick = now => { const t = now/1000, dt = Math.min(.05, lastT ? t - lastT : .016); lastT = t; Shop.frames.forEach(f => f(t, dt)); Shop.anim = requestAnimationFrame(tick); };
+    Shop.anim = requestAnimationFrame(tick);
+  }
+}
+async function buy(it, btn){
+  if (!Acct.signedIn){ closeShop(); openAcct(); return; }
+  if (!btn.classList.contains('confirm')){   // two taps to buy: no accidental purchases
+    btn.classList.add('confirm'); btn.textContent = 'أكيد؟ اكبس كمان مرة';
+    setTimeout(() => { if (btn.isConnected && btn.classList.contains('confirm')) renderShop(); }, 3000);
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'لحظة...';
+  try { const r = await rpc('buy_item', { p_token:Acct.token, p_item:it.id }); it.owned = true; Acct.setCoins(r.coins); Sound.refund();
+    $('shopNote').textContent = 'صار عندك «' + it.name + '»! اكبس «البسه» عشان يطلع عليك.'; }
+  catch(e){ $('shopNote').textContent = shopErr(e); Sound.deny(); }
+  renderShop();
+}
+async function equip(it, btn){
+  btn.disabled = true;
+  try {
+    Acct.eq = await rpc('equip_item', { p_token:Acct.token, p_slot:it.slot, p_item:it.equipped ? null : it.id }) || {};
+    Shop.items.forEach(x => { x.equipped = Acct.eq[x.slot] === x.id; });
+    $('shopNote').textContent = it.equipped ? 'لبست «' + it.name + '»' : 'شلحت «' + it.name + '»';
+    Board.refresh();
+  } catch(e){ $('shopNote').textContent = shopErr(e); }
+  renderShop();
+}
+$('shopBtn').addEventListener('click', openShop);
+$('shopBack').addEventListener('click', closeShop);
+$('shopLogin').addEventListener('click', () => { closeShop(); openAcct(); });
 
 /* ---------- canvas setup ---------- */
 let W = 0, H = 0;
@@ -451,6 +557,7 @@ const Perf = { low:false, acc:0, n:0, slow:0,
   enableLow(){ this.low = true; ctx.shadowBlur = 0; try { Object.defineProperty(ctx, 'shadowBlur', { configurable:true, get(){ return 0; }, set(){} }); } catch(e){} }
 };
 let S = null, stars = [], keys = {}, last = 0;
+const Cos = AuraCos.sys();   // shop trail + FLEX effect particles (visual only)
 function resize(){
   const r = cv.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
   if (!r.width || !r.height) return;
@@ -488,9 +595,10 @@ const mult = () => S.ego >= 67 ? 3 : S.ego >= 34 ? 2 : 1;
 function start(){
   Sound.init();
   const nick = $('nick').value.trim().slice(0,16); store.set('auraNick', nick);
-  S = newState(); P.x = P.tx = P.px = W/2; P.kv = 0;
+  S = newState(); P.x = P.tx = P.px = W/2; P.kv = 0; Cos.parts = []; Cos.bolts = [];
   if (S.char === 'menace') S.lives = 2;
-  ['startScreen','overScreen','pauseScreen','achScreen','boardScreen','acctScreen'].forEach(id => $(id).hidden = true);
+  ['startScreen','overScreen','pauseScreen','achScreen','boardScreen','acctScreen','shopScreen'].forEach(id => $(id).hidden = true);
+  stopShopAnim();
   renderLives(); banner('المرحلة 1', S.cfg.name); Sound.setMode('level', 0); Sound.level(); Sound.startMusic();
   stage.focus && stage.focus();
 }
@@ -533,7 +641,8 @@ async function gameOver(){
     : res.status === 'rejected' ? 'النتيجة ما عدّت فحص الغش'
     : res.status === 'slow' ? 'استنى شوي بين كل لعبة والثانية'
     : 'ما في اتصال، انحفظت نتيجتك على جهازك')
-    + (fresh.length ? ' · لقب جديد: ' + fresh.join('، ') : '');
+    + (fresh.length ? ' · لقب جديد: ' + fresh.join('، ') : '')
+    + (res.earned > 0 ? ' · +' + res.earned + ' عملة' : res.capHit ? ' · خلصت عملات الجولات لليوم' : '');
 }
 function renderLives(){
   livesEl.textContent = '';
@@ -561,6 +670,7 @@ function flex(){
   if (b && b.clones){ b.clones.forEach(c => burst(c.x, c.y, b.color, 14, 200)); b.clones = []; }
   if (b && b.minions){ b.minions.forEach(mn => burst(mn.x, mn.y, '#9aa4ff', 12, 200)); b.minions = []; }
   S.rings.push({ x:P.x, y:P.y, r:10, life:1, color: tier === 'perfect' ? C.gold : C.cyan });
+  if (!reduce) AuraCos.flex(Cos, Acct.eq.flex, P.x, P.y, W, H, Perf.low);   // cosmetic FLEX effect from the shop
   burst(P.x,P.y, tier === 'perfect' ? C.gold : C.cyan, tier === 'normal' ? 40 : 70, tier === 'normal' ? 420 : 560);
   const label = tier === 'perfect' ? 'PERFECT FLEX! +' : tier === 'super' ? 'SUPER FLEX +' : 'FLEX +';
   say(P.x, P.y-60, label + gain, tier === 'perfect' ? C.gold : C.cyan, tier === 'normal' ? 34 : 38);
@@ -801,6 +911,7 @@ function update(rawDt){
   if (dir || Math.abs(P.kv) > 5){ P.x += P.kv*dt; P.x = clamp(P.x, P.r, W - P.r); P.tx = P.x; }
   else { P.tx = clamp(P.tx, P.r, W - P.r); P.x += (P.tx - P.x) * Math.min(1, dt*(P.touch ? 26 : 16)*(isChar('ghost') ? .85 : 1)); }
   P.dx = P.x - P.px;
+  if (!reduce){ AuraCos.trail(Cos, Acct.eq.trail, P.x, P.y, P.r, dt, P.dx, S.speed, Perf.low); AuraCos.step(Cos, dt); }   // cosmetic only
 
   // phases
   if (S.phase === 'level'){
@@ -1041,6 +1152,7 @@ function draw(now){
     S.parts.forEach(p => { ctx.globalAlpha = Math.max(0, p.life/p.max); ctx.fillStyle = p.color; ctx.fillRect(p.x - p.s/2, p.y - p.s/2, p.s, p.s); });
     ctx.globalAlpha = 1;
   }
+  if (S) AuraCos.draw(ctx, Cos, t);
   drawPlayer(t);
   if (S && S.eclipseT > 0){
     const k = Math.min(1, S.eclipseT*2, (4.5 - S.eclipseT)*3);
@@ -1318,14 +1430,18 @@ function drawPlayer(t){
   const rr = P.r + 8 + ego*.15, sp = danger ? 9 : 3;
   ctx.beginPath(); ctx.arc(px,py,rr, t*sp, t*sp + Math.PI*1.3); ctx.stroke();
   ctx.beginPath(); ctx.arc(px,py,rr, t*sp + Math.PI, t*sp + Math.PI*1.6); ctx.stroke();
+  const eq = Acct.eq;
+  AuraCos.wearBack(ctx, px, py, P.r, eq, t, S ? P.dx : 0);
   ctx.fillStyle = C.text; ctx.shadowColor = `rgb(${col})`; ctx.shadowBlur = 20;
   ctx.beginPath(); ctx.arc(px,py,P.r,0,7); ctx.fill(); ctx.shadowBlur = 0;
-  if (ch === 'menace'){ ctx.fillStyle = '#ff5a5a'; [-1, 1].forEach(s => { ctx.beginPath(); ctx.moveTo(px + s*P.r*.7, py - P.r*.6); ctx.lineTo(px + s*P.r*.35, py - P.r*1.4); ctx.lineTo(px + s*P.r*.12, py - P.r*.8); ctx.fill(); }); }
+  if (eq.head){ /* a hat from the shop replaces the character's head piece */ }
+  else if (ch === 'menace'){ ctx.fillStyle = '#ff5a5a'; [-1, 1].forEach(s => { ctx.beginPath(); ctx.moveTo(px + s*P.r*.7, py - P.r*.6); ctx.lineTo(px + s*P.r*.35, py - P.r*1.4); ctx.lineTo(px + s*P.r*.12, py - P.r*.8); ctx.fill(); }); }
   else if (ch === 'magnet'){ ctx.strokeStyle = '#be96ff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(px, py - P.r*.95, P.r*.42, Math.PI, 0); ctx.stroke(); }
   else if (ch === 'gambler'){ ctx.fillStyle = C.gold; ctx.fillRect(px - P.r*.5, py - P.r*1.3, P.r, P.r*.4); ctx.fillRect(px - P.r*.85, py - P.r*.95, P.r*1.7, P.r*.13); }
   ctx.fillStyle = C.ink; const w = P.r*1.5;
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(px - w/2, py - P.r*.35, w, P.r*.45, 4) : ctx.rect(px - w/2, py - P.r*.35, w, P.r*.45); ctx.fill();
   ctx.fillStyle = `rgba(${col},.9)`; ctx.fillRect(px - w/2 + 3, py - P.r*.3, 4, 2);
+  AuraCos.wearFront(ctx, px, py, P.r, eq, t);
   if (S && S.shield > 0){ ctx.globalAlpha = 1; ctx.strokeStyle = `rgba(127,227,255,${S.shield < 2 ? .4 + .4*Math.sin(t*20) : .85})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(px, py, P.r + 12, 0, 7); ctx.stroke(); }
   ctx.restore();
 }
@@ -1395,7 +1511,7 @@ cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.addEventListener('touchmove', e => e.preventDefault(), { passive:false });   // older iOS: no page scroll while dragging
 document.addEventListener('gesturestart', e => { if (S && S.run) e.preventDefault(); });
 addEventListener('keydown', e => {
-  if (!$('acctScreen').hidden) return;   // account forms handle their own keys
+  if (!$('acctScreen').hidden || !$('shopScreen').hidden) return;   // account forms / shop handle their own keys
   if (e.target && e.target.tagName === 'INPUT'){ if (e.key === 'Enter'){ e.preventDefault(); start(); } return; }
   const k = e.key;
   if (k === 'ArrowLeft' || k === 'a' || k === 'A') keys.left = true;

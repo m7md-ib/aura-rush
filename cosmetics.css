@@ -1,0 +1,26 @@
+/* Aura Rush cosmetics: name effects (leaderboards), profile frames and banners. Shared by all pages. */
+.nm-gold{color:#ffc94d}
+.nm-grad{background:linear-gradient(90deg,#6ee7ff,#ff5fd2);-webkit-background-clip:text;background-clip:text;color:transparent}
+.nm-glow{color:#fff;text-shadow:0 0 6px #6ee7ff,0 0 14px #6ee7ff}
+.nm-rainbow{background:linear-gradient(90deg,#ff4f7b,#ffc94d,#3dff9a,#6ee7ff,#b06cff,#ff4f7b);background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:nmRainbow 3s linear infinite}
+.nm-king{color:#ffc94d;text-shadow:0 0 8px rgba(255,201,77,.85),0 0 2px #fff3c4}
+@keyframes nmRainbow{to{background-position:200% 0}}
+
+.fr-gold{border:3px solid #ffc94d!important;box-shadow:0 0 26px rgba(255,201,77,.35)}
+.fr-neon{border:3px solid #6ee7ff!important;box-shadow:0 0 18px rgba(110,231,255,.7),inset 0 0 18px rgba(255,95,210,.35)}
+.fr-slayer{border:3px solid #ff3b3b!important;box-shadow:0 0 28px rgba(255,59,59,.5),inset 0 0 0 3px rgba(255,201,77,.6)}
+
+.bn-city{background:
+  repeating-linear-gradient(90deg,transparent 0 22px,rgba(255,201,77,.18) 22px 26px,transparent 26px 40px) bottom/100% 38% no-repeat,
+  linear-gradient(0deg,#0d0a24 0 22%,transparent 22%),
+  linear-gradient(180deg,#0a0f2c,#2a1650 70%,#3b1d5e)!important}
+.bn-sunset{background:radial-gradient(circle at 70% 85%,#ffd27a 0 12%,transparent 13%),linear-gradient(180deg,#5b2a86,#ff4f7b 62%,#ff9a3d)!important}
+.bn-galaxy{background:
+  radial-gradient(1.5px 1.5px at 12% 30%,#fff,transparent),radial-gradient(1.5px 1.5px at 40% 70%,#fff,transparent),
+  radial-gradient(2px 2px at 75% 25%,#fff,transparent),radial-gradient(1.5px 1.5px at 88% 65%,#fff,transparent),
+  radial-gradient(ellipse at 30% 40%,rgba(176,108,255,.55),transparent 55%),radial-gradient(ellipse at 75% 60%,rgba(110,231,255,.35),transparent 55%),
+  #0a0620!important}
+.bn-hunter{background:repeating-linear-gradient(90deg,rgba(61,255,154,.09) 0 2px,transparent 2px 14px),linear-gradient(180deg,#04160b,#0b0b1a)!important}
+
+@media (prefers-reduced-motion: reduce){.nm-rainbow{animation:none}}

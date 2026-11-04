@@ -7,6 +7,8 @@
 <meta name="description" content="صفحة لاعب بـ Aura Rush: أعلى نتيجة، الترتيب، الإنجازات وآخر الجولات.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@400;700;800&display=swap">
+<link rel="stylesheet" href="cosmetics.css">
+<script src="cosmetics.js"></script>
 <style>
 /* Layout: player card (name, title, join date) → stat grid → achievements grid → recent runs table */
 :root{
@@ -26,7 +28,11 @@ nav{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-
 nav a{color:var(--muted);font-weight:800;text-decoration:none}
 nav a:hover,nav a:focus-visible{color:var(--cyan);outline:none}
 .play{font-family:var(--display);font-size:20px;padding:8px 24px;border-radius:14px;background:var(--gold);color:var(--ink)!important;box-shadow:0 0 24px rgba(255,201,77,.35)}
-.card{background:var(--ink2);border:1px solid var(--line);border-radius:18px;padding:20px;display:grid;gap:6px}
+.card{background:var(--ink2);border:1px solid var(--line);border-radius:18px;padding:20px;display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:16px;row-gap:6px;align-items:center}
+.card > :not(.av){grid-column:2}
+.card .av{grid-row:1 / span 3;width:96px;height:110px}
+.card.banner h1,.card.banner p{text-shadow:0 2px 10px rgba(0,0,0,.85)}
+@media (max-width:420px){.card .av{width:72px;height:84px}}
 h1{margin:0;font-family:var(--display);font-weight:400;font-size:clamp(36px,9vw,56px);line-height:1.05;color:var(--gold);text-shadow:0 0 26px rgba(255,201,77,.4);overflow-wrap:anywhere}
 .vf{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--cyan);color:var(--ink);font:800 16px/1 var(--body);margin-inline-end:10px;vertical-align:8px;text-shadow:none}
 .ttl{color:var(--cyan);font-weight:800;font-size:16px;margin:0}
@@ -98,6 +104,14 @@ function playtime(sec){
 function el(tag, cls, text){ const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 const main = document.getElementById('main');
 
+/* the player's ball wearing their equipped outfit (same drawing as in the game) */
+function drawAvatar(cv, eq){
+  const d = Math.min(2, devicePixelRatio || 1), w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w*d; cv.height = h*d; const ctx = cv.getContext('2d'); ctx.setTransform(d, 0, 0, d, 0, 0);
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const frame = now => { ctx.clearRect(0, 0, w, h); AuraCos.avatar(ctx, w/2, h*.52, Math.min(w, h)*.2, eq, now/1000); if (!still) requestAnimationFrame(frame); };
+  requestAnimationFrame(frame);
+}
 function missing(msg){
   main.textContent = '';
   const d = el('div', 'missing'); d.append(el('p', '', msg));
@@ -110,8 +124,11 @@ function render(p){
   main.textContent = '';
   const box = el('div'); box.style.display = 'grid'; box.style.gap = '22px';
 
-  const card = el('section', 'card');
-  const h = el('h1'); const v = el('span', 'vf', '✓'); v.title = 'حساب مسجّل'; h.append(v, p.username); card.append(h);
+  const eq = p.equipped || {}, cls = (slot, pre) => /^[a-z]+_[a-z]+$/.test(eq[slot] || '') ? ' ' + pre + eq[slot].replace(/^[a-z]+_/, '') : '';
+  const card = el('section', 'card' + cls('frame', 'fr-') + cls('banner', 'bn-') + (eq.banner ? ' banner' : ''));
+  const av = el('canvas', 'av'); av.setAttribute('aria-hidden', 'true'); card.append(av);
+  const h = el('h1'); const v = el('span', 'vf', '✓'); v.title = 'حساب مسجّل'; h.append(v, el('span', AuraCos.nameClass(eq.name), p.username)); card.append(h);
+  requestAnimationFrame(() => drawAvatar(av, eq));
   if (p.title) card.append(el('p', 'ttl', '«' + p.title + '»'));
   card.append(el('p', 'joined', 'معنا من ' + date(p.joined)));
   box.append(card);
