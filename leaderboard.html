@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>عرش الـAURA</title>
+<meta name="description" content="أفضل 100 لاعب بـ Aura Rush.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@400;700;800&display=swap">
+<style>
+/* Layout: arcade scoreboard — title + stat strip, podium for top 3, then the ranked table */
+:root{
+  --ink:#110a22; --ink2:#1c1336; --ink3:#251a45; --line:#3a2c66;
+  --gold:#ffc94d; --cyan:#6ee7ff; --cringe:#ff4f7b; --silver:#cfc8ea; --bronze:#e59a5c;
+  --text:#f4effe; --muted:#a99ecb;
+  --display:'Lalezar','Tajawal',system-ui,sans-serif; --body:'Tajawal',system-ui,sans-serif;
+  color-scheme:dark;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--text);font-family:var(--body);font-size:15px;
+  background-image:radial-gradient(ellipse at 50% -10%, rgba(255,201,77,.14), transparent 60%)}
+.wrap{max-width:860px;margin:0 auto;padding-block:24px 48px;
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));display:grid;gap:22px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-family:var(--display);font-weight:400;font-size:clamp(38px,9vw,60px);line-height:1;color:var(--gold);text-shadow:0 0 28px rgba(255,201,77,.45)}
+h1 span{color:var(--cyan)}
+.sub{color:var(--muted);margin:6px 0 0;font-size:15px}
+.play{font-family:var(--display);font-size:22px;padding:10px 30px;border-radius:14px;background:var(--gold);color:var(--ink);text-decoration:none;box-shadow:0 0 24px rgba(255,201,77,.35)}
+.play:focus-visible,.tabs button:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.stat{background:var(--ink2);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.stat b{display:block;font-family:var(--display);font-weight:400;font-size:30px;line-height:1.1;color:var(--text);font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:13px;font-weight:700}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.tabs{display:flex;background:var(--ink2);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px}
+.tabs button{font:800 14px var(--body);color:var(--muted);background:none;border:0;border-radius:9px;padding:7px 14px;cursor:pointer}
+.tabs button[aria-pressed="true"]{background:var(--ink3);color:var(--gold)}
+.updated{color:var(--muted);font-size:13px}
+.podium{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:10px;align-items:end}
+.pod{background:var(--ink2);border:1px solid var(--line);border-radius:16px;padding:16px 10px;text-align:center;min-width:0}
+.pod .crown{font-family:var(--display);font-size:30px;line-height:1}
+.pod .name{font-weight:800;font-size:16px;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pod .pts{font-family:var(--display);font-size:26px;font-variant-numeric:tabular-nums}
+.pod .meta{color:var(--muted);font-size:12px;font-weight:700}
+.pod.p1{padding-block:26px;border-color:var(--gold);box-shadow:0 0 30px rgba(255,201,77,.18)}
+.pod.p1 .crown,.pod.p1 .pts{color:var(--gold)}
+.pod.p2 .crown,.pod.p2 .pts{color:var(--silver)}
+.pod.p3 .crown,.pod.p3 .pts{color:var(--bronze)}
+.pod.empty{opacity:.45}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--ink2)}
+table{width:100%;border-collapse:collapse;min-width:540px}
+th{font-size:12px;font-weight:800;color:var(--muted);text-align:start;padding:10px 12px;border-bottom:1px solid var(--line);letter-spacing:.04em}
+td{padding:9px 12px;border-bottom:1px solid rgba(58,44,102,.5);font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+td.r{font-family:var(--display);font-size:18px;color:var(--muted);width:48px}
+td.n{font-weight:800;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+td.s{font-family:var(--display);font-size:19px;color:var(--gold)}
+td.m{color:var(--muted);font-size:13px;white-space:nowrap}
+.ttl{display:block;font-size:11px;font-weight:700;color:var(--gold);margin-top:1px}
+tr.me td{background:rgba(110,231,255,.1)}
+tr.me td.n::after{content:" (إنت)";color:var(--cyan);font-weight:700}
+.note{color:var(--muted);text-align:center;padding:28px 12px;margin:0}
+.mine{background:var(--ink2);border:1px solid var(--cyan);border-radius:14px;padding:12px 16px;color:var(--cyan);font-weight:800}
+@media (max-width:520px){.podium{grid-template-columns:1fr;}.pod.p1{order:-1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>عرش الـ<span>AURA</span></h1>
+      <p class="sub">أفضل 100 لاعب بـ Aura Rush. كل لاعب بتنحسب أعلى نتيجة إله.</p>
+    </div>
+    <a class="play" href="/">العب هلأ</a>
+  </header>
+
+  <section class="stats" aria-label="إحصائيات">
+    <div class="stat"><b id="stRuns">–</b><span>لعبة انلعبت</span></div>
+    <div class="stat"><b id="stPlayers">–</b><span>لاعب</span></div>
+    <div class="stat"><b id="stBosses">–</b><span>زعيم انهزم</span></div>
+    <div class="stat"><b id="stLevel">–</b><span>أبعد مرحلة</span></div>
+    <div class="stat"><b id="stToday">–</b><span>لعبة آخر 24 ساعة</span></div>
+  </section>
+
+  <div class="bar">
+    <div class="tabs" role="group" aria-label="الفترة">
+      <button id="tAll" aria-pressed="true">كل الأوقات</button>
+      <button id="tWeek" aria-pressed="false">هالأسبوع</button>
+    </div>
+    <span class="updated" id="updated">عم نحمّل...</span>
+  </div>
+
+  <div class="mine" id="mine" hidden></div>
+
+  <section class="podium" id="podium"></section>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>اللاعب</th><th>الشخصية</th><th>الهالة</th><th>المرحلة</th><th>زعماء</th><th>متى</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="note" id="note" hidden></p>
+  </div>
+</div>
+<script>
+(() => {
+const SB_URL = 'https://neciihvhzlxqijgfddmw.supabase.co', SB_KEY = 'sb_publishable_JLUNUppVVhSm5wglgE7QdA_klJ6Jdgt';
+const $ = id => document.getElementById(id);
+async function rpc(fn, body){
+  const r = await fetch(SB_URL + '/rest/v1/rpc/' + fn, { method:'POST', headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body:JSON.stringify(body || {}) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+let me = null; try { me = JSON.parse(localStorage.getItem('auraPlayer')); } catch(e){}
+let period = 'all';
+const CHARS = { sigma:'Sigma', menace:'The Menace', magnet:'The Magnet', ghost:'The Ghost', gambler:'The Gambler' };
+const fmt = n => Number(n || 0).toLocaleString('en-US');
+function ago(ts){
+  const s = (Date.now() - new Date(ts).getTime())/1000;
+  if (s < 60) return 'هلأ'; if (s < 3600) return 'قبل ' + Math.floor(s/60) + ' د';
+  if (s < 86400) return 'قبل ' + Math.floor(s/3600) + ' س'; return 'قبل ' + Math.floor(s/86400) + ' يوم';
+}
+function el(tag, cls, text){ const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+function render(rows){
+  const pod = $('podium'); pod.textContent = '';
+  [[1,'p2','٢'],[0,'p1','♛'],[2,'p3','٣']].forEach(([i, cls, mark]) => {
+    const r = rows[i], d = el('div', 'pod ' + cls + (r ? '' : ' empty'));
+    d.appendChild(el('div', 'crown', mark));
+    d.appendChild(el('div', 'name', r ? (r.nick || 'لاعب مجهول') : 'فاضي'));
+    d.appendChild(el('div', 'pts', r ? fmt(r.score) : '–'));
+    d.appendChild(el('div', 'meta', r ? (r.title ? '«' + r.title + '» · ' : '') + 'المرحلة ' + r.level + ' · ' + r.bosses + ' زعماء' : 'مكانك هون؟'));
+    pod.appendChild(d);
+  });
+  const tb = $('rows'); tb.textContent = '';
+  rows.forEach(r => {
+    const tr = el('tr', r.is_me ? 'me' : '');
+    tr.appendChild(el('td', 'r', r.rank));
+    const tn = el('td', 'n', r.nick || 'لاعب مجهول'); if (r.title){ tn.appendChild(el('small', 'ttl', '«' + r.title + '»')); } tr.appendChild(tn);
+    tr.appendChild(el('td', 'm', CHARS[r.character] || ''));
+    tr.appendChild(el('td', 's', fmt(r.score)));
+    tr.appendChild(el('td', 'm', r.level));
+    tr.appendChild(el('td', 'm', r.bosses));
+    tr.appendChild(el('td', 'm', ago(r.achieved_at)));
+    tb.appendChild(tr);
+  });
+  const note = $('note');
+  note.hidden = rows.length > 0;
+  note.textContent = period === 'week' ? 'ما حدا لعب هالأسبوع لسا. كون أول واحد.' : 'العرش فاضي. العب وكون أول ملك.';
+}
+
+async function load(){
+  try {
+    const [rows, stats, mine] = await Promise.all([
+      rpc('get_leaderboard_v2', { p_limit:100, p_player:me, p_period:period }),
+      rpc('get_stats', {}),
+      me ? rpc('get_my_rank', { p_player:me, p_period:period }) : Promise.resolve(null)
+    ]);
+    render(rows || []);
+    $('stRuns').textContent = fmt(stats.runs); $('stPlayers').textContent = fmt(stats.players);
+    $('stBosses').textContent = fmt(stats.bosses); $('stLevel').textContent = stats.max_level || '–'; $('stToday').textContent = fmt(stats.runs_today);
+    const m = $('mine');
+    if (mine && mine.rank){ m.hidden = false; m.textContent = 'ترتيبك #' + mine.rank + ' · أفضل نتيجة إلك ' + fmt(mine.best) + ' هالة'; } else m.hidden = true;
+    $('updated').textContent = 'آخر تحديث ' + new Date().toLocaleTimeString('ar-JO', { hour:'2-digit', minute:'2-digit' });
+  } catch(e){
+    $('updated').textContent = 'ما قدرنا نجيب اللوحة. جرّب كمان شوي.';
+  }
+}
+function setPeriod(p){ period = p; $('tAll').setAttribute('aria-pressed', p === 'all'); $('tWeek').setAttribute('aria-pressed', p === 'week'); load(); }
+$('tAll').addEventListener('click', () => setPeriod('all'));
+$('tWeek').addEventListener('click', () => setPeriod('week'));
+load(); setInterval(load, 30000);
+})();
+</script>
+</body>
+</html>

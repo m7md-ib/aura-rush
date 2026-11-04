@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Aura Rush</title>
+<meta name="description" content="لعبة سرعة: اجمع الهالة، اهزم الزعماء، واطلع على عرش الـAURA.">
+<meta property="og:title" content="Aura Rush">
+<meta property="og:description" content="مين ملك الـAURA؟ العب وتحدى صحابك.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@400;700;800&display=swap">
+<style>
+/* Layout: one-screen arcade — HUD strip + level bar on top, play field fills the rest, FLEX button under it */
+:root{
+  --ink:#110a22; --ink2:#1c1336; --line:#3a2c66;
+  --gold:#ffc94d; --cyan:#6ee7ff; --cringe:#ff4f7b; --boss:#ff7a3d;
+  --text:#f4effe; --muted:#a99ecb;
+  --display:'Lalezar', 'Tajawal', system-ui, sans-serif;
+  --body:'Tajawal', system-ui, sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+*{-webkit-tap-highlight-color:transparent}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}
+body{margin:0;font-size:14px}
+[hidden]{display:none!important}
+body{background:var(--ink);color:var(--text);font-family:var(--body);overflow:hidden;-webkit-user-select:none;user-select:none}
+#app{height:100%;display:flex;flex-direction:column;gap:8px;padding-block:10px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));box-sizing:border-box}
+.hud{display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;align-items:center}
+.score{font-family:var(--display);font-size:30px;line-height:1;color:var(--gold);font-variant-numeric:tabular-nums;min-width:4ch}
+.score small{display:block;font-family:var(--body);font-size:11px;color:var(--muted);letter-spacing:.08em;font-weight:700}
+.ego{min-width:0}
+.ego-top{display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px}
+.ego-top b{color:var(--cyan);font-family:var(--display);font-size:16px;font-weight:400}
+.bar{height:10px;border-radius:99px;background:var(--ink2);border:1px solid var(--line);overflow:hidden}
+.fill{height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--gold) 70%,var(--cringe));background-size:300px 100%;border-radius:99px}
+.lives{display:flex;gap:5px;flex-wrap:wrap;max-width:76px}
+.lives i{width:12px;height:12px;border-radius:50%;background:var(--gold);box-shadow:0 0 10px var(--gold)}
+.lives i.off{background:var(--ink2);box-shadow:none;border:1px solid var(--line)}
+.icon-btn{width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--ink2);color:var(--text);display:grid;place-items:center;cursor:pointer;padding:0}
+.icon-btn svg{width:20px;height:20px}
+.icon-btn .x{display:none}
+.icon-btn.muted .x{display:inline}.icon-btn.muted .w{display:none}
+.lvl{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:800;color:var(--muted)}
+.lvl span{white-space:nowrap}
+.lvl #lvlName{color:var(--text)}
+.lvl .bar{flex:1;height:6px}
+#lvlFill{height:100%;width:0;background:var(--gold);border-radius:99px}
+.lvl.boss #lvlFill{background:var(--boss)}
+.lvl.boss #lvlName{color:var(--boss)}
+#stage{flex:1;min-height:0;position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--line);touch-action:none;background:var(--ink2)}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#flex{font-family:var(--display);font-size:24px;padding:11px;border-radius:14px;border:1px solid var(--line);
+  background:var(--ink2);color:var(--muted);cursor:pointer;letter-spacing:.04em;transition:background .15s,color .15s,box-shadow .15s}
+#flex.ready{color:var(--ink);background:var(--cyan);border-color:var(--cyan);box-shadow:0 0 24px rgba(110,231,255,.45)}
+#flex:focus-visible,.btn:focus-visible,.icon-btn:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:safe center;gap:12px;text-align:center;
+  background:rgba(17,10,34,.86);backdrop-filter:blur(4px);padding:20px 16px;box-sizing:border-box;overflow-y:auto}
+.logo{font-family:var(--display);font-size:clamp(44px,11vw,80px);line-height:.9;color:var(--gold);text-shadow:0 0 30px rgba(255,201,77,.55);letter-spacing:.02em}
+.logo span{color:var(--cyan);text-shadow:0 0 30px rgba(110,231,255,.55)}
+.tag{font-size:16px;color:var(--muted);max-width:34ch;text-wrap:balance;margin:0}
+.rules{display:grid;gap:7px;font-size:14px;text-align:start;max-width:360px}
+.rules div{display:flex;gap:10px;align-items:center}
+.sw{flex:none;width:18px;height:18px;border-radius:4px}
+.sw.g{background:var(--gold);transform:rotate(45deg) scale(.8)}
+.sw.c{background:var(--cyan);clip-path:polygon(0 100%,0 25%,25% 60%,50% 10%,75% 60%,100% 25%,100% 100%)}
+.sw.r{background:var(--cringe);color:var(--ink);font:400 14px/18px var(--display);text-align:center}
+.sw.b{background:var(--boss);border-radius:50%}
+kbd{font-family:var(--body);font-weight:800;font-size:12px;border:1px solid var(--line);border-radius:5px;padding:1px 6px;background:var(--ink2)}
+.nick-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
+.nick-row label{font-weight:800;color:var(--muted);font-size:14px}
+#nick{font:700 16px var(--body);background:var(--ink2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:8px 12px;width:180px;max-width:100%;text-align:center}
+.btn{font-family:var(--display);font-size:24px;padding:10px 38px;border-radius:14px;border:0;background:var(--gold);color:var(--ink);cursor:pointer;box-shadow:0 0 28px rgba(255,201,77,.4)}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line);box-shadow:none;font-size:18px;padding:8px 22px}
+.rank{font-family:var(--display);font-size:clamp(36px,10vw,60px);line-height:1;color:var(--cyan);text-shadow:0 0 26px rgba(110,231,255,.5)}
+.stats{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
+.stats div{display:flex;flex-direction:column;align-items:center;font-size:13px;color:var(--muted);font-weight:700}
+.stats b{color:var(--gold);font-family:var(--display);font-size:26px;font-weight:400;line-height:1.1;font-variant-numeric:tabular-nums}
+.status{font-size:14px;color:var(--cyan);min-height:1.2em;margin:0}
+.board{width:min(340px,100%);border:1px solid var(--line);border-radius:14px;background:var(--ink2);padding:10px 12px;box-sizing:border-box}
+.board h3{margin:0 0 6px;font-family:var(--display);font-weight:400;font-size:20px;color:var(--gold)}
+.board ol{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+.board li{display:grid;grid-template-columns:22px 1fr auto auto;gap:8px;align-items:center;font-size:14px;padding:3px 4px;border-radius:6px}
+.board li.me{background:rgba(110,231,255,.12)}
+.board li .n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:start;font-weight:700}
+.board li .p{color:var(--muted);font-weight:800}
+.board li .lv{color:var(--muted);font-size:12px}
+.board li .s{font-family:var(--display);color:var(--gold);font-size:17px;font-variant-numeric:tabular-nums}
+.board li:first-child .p{color:var(--gold)}
+.board .empty{color:var(--muted);font-size:14px;padding:4px 0}
+@media (max-width:420px){.score{font-size:24px}.hud{gap:10px}.rules{font-size:13px}}
+@media (prefers-reduced-motion: reduce){#flex{transition:none}}
+/* ---- device-adaptive controls (update: PC + mobile) ---- */
+#stage{-webkit-touch-callout:none}
+.overlay{touch-action:pan-y;overscroll-behavior:contain}
+.icon-btn,#flex,.btn{touch-action:manipulation;-webkit-touch-callout:none}
+#pauseBtn{display:none}
+#pauseBtn:disabled{opacity:.4;cursor:default}
+.touch #pauseBtn{display:grid}
+.touch .hud{grid-template-columns:auto 1fr auto auto auto}
+#flex{position:relative;overflow:hidden;transition:background .15s,color .15s,box-shadow .15s,transform .08s}
+#flex .charge{position:absolute;inset:0 auto 0 0;width:0;background:rgba(110,231,255,.16);pointer-events:none}
+#flex .lbl{position:relative}
+#flex.pressed{transform:scale(.96)}
+#flex.low{color:var(--muted)}
+.touch #flex{min-height:62px;font-size:28px;border-radius:18px}
+@media (pointer:coarse){.icon-btn{width:42px;height:42px;border-radius:12px}}
+@media (max-width:400px) and (orientation:portrait){.touch .hud{grid-template-columns:1fr auto auto auto;row-gap:6px}.touch .hud .ego{grid-column:1 / -1;grid-row:2}}
+@media (max-width:360px){.score{font-size:21px}.hud{gap:8px}.lives{max-width:62px;gap:4px}.lives i{width:10px;height:10px}.lvl{font-size:12px;gap:6px}}
+@media (orientation:landscape) and (max-height:520px){
+  #app{display:grid;grid-template-columns:minmax(0,1fr) clamp(170px,26vw,240px);grid-template-rows:auto auto minmax(0,1fr) auto;gap:8px 12px;padding-block:8px}
+  .hud,.touch .hud{grid-column:2;grid-row:1;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .hud .score{flex:1 1 auto;font-size:24px}
+  .hud .ego{order:5;flex:1 1 100%}
+  .lvl{grid-column:2;grid-row:2;flex-wrap:wrap;gap:4px 8px;font-size:12px;align-self:start}
+  .lvl .bar{flex:1 1 100%}
+  #stage{grid-column:1;grid-row:1 / -1}
+  #flex,.touch #flex{grid-column:2;grid-row:4;min-height:72px}
+}
+.fill.danger{animation:egoPulse .25s ease-in-out infinite alternate}
+@keyframes egoPulse{from{filter:brightness(1)}to{filter:brightness(1.8) saturate(1.6)}}
+#flex.super{background:var(--gold);border-color:var(--gold);box-shadow:0 0 28px rgba(255,201,77,.6)}
+#flex.perfect{background:linear-gradient(90deg,var(--gold),#fff3c4,var(--gold));border-color:#fff3c4;box-shadow:0 0 36px rgba(255,230,150,.85)}
+.sw.f{background:linear-gradient(90deg,var(--cyan),var(--gold));border-radius:50%}
+.death{margin:0;font-size:17px;font-weight:800;color:var(--text);max-width:30ch;text-wrap:balance}
+.challenge{margin:0;font-size:15px;font-weight:800;color:var(--ink);background:var(--gold);border-radius:12px;padding:8px 14px;max-width:34ch;text-wrap:balance}
+@media (prefers-reduced-motion: reduce){.fill.danger{animation:none}}
+.chars{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:380px}
+.char{font:800 13px var(--body);padding:6px 10px;border-radius:10px;border:1px solid var(--line);background:var(--ink2);color:var(--text);cursor:pointer;touch-action:manipulation}
+.char[aria-pressed="true"]{border-color:var(--gold);color:var(--gold);box-shadow:0 0 14px rgba(255,201,77,.3)}
+.char:focus-visible,#titleSel:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.char-desc{margin:0;font-size:13px;color:var(--muted);min-height:1.2em;max-width:34ch}
+#titleSel{font:700 14px var(--body);background:var(--ink2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:6px 10px;max-width:200px}
+.ach-list{list-style:none;margin:0;padding:0;display:grid;gap:6px;width:min(380px,100%)}
+.ach-list li{display:grid;grid-template-columns:1fr auto;gap:2px 10px;text-align:start;background:var(--ink2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.ach-list li b{font-family:var(--display);font-weight:400;font-size:17px;color:var(--muted)}
+.ach-list li i{font-style:normal;font-size:12px;color:var(--muted);align-self:center}
+.ach-list li span{grid-column:1/-1;font-size:12px;color:var(--muted)}
+.ach-list li.got{border-color:var(--gold)} .ach-list li.got b{color:var(--gold)} .ach-list li.got i{color:var(--text)}
+#flex.banned{filter:grayscale(1);opacity:.55}
+.links{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+a.btn{text-decoration:none;display:inline-block}
+</style>
+</head>
+<body>
+
+<div id="app" dir="rtl">
+  <div class="hud">
+    <div class="score"><small>الهالة (AURA)</small><span id="sc">0</span></div>
+    <div class="ego">
+      <div class="ego-top"><span>الإيجو</span><b id="mult">x1</b></div>
+      <div class="bar"><div class="fill" id="egofill"></div></div>
+    </div>
+    <div class="lives" id="lives"></div>
+    <button class="icon-btn" id="pauseBtn" aria-label="إيقاف مؤقت" disabled><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+    <button class="icon-btn" id="muteBtn" aria-label="الصوت">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="w" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/><path class="x" d="M16 9l5 6M21 9l-5 6"/></svg>
+    </button>
+  </div>
+  <div class="lvl" id="lvlRow"><span id="lvlNum">المرحلة 1</span><span id="lvlName">الحارة</span><div class="bar"><div id="lvlFill"></div></div></div>
+
+  <div id="stage">
+    <canvas id="cv"></canvas>
+
+    <div class="overlay" id="achScreen" hidden>
+      <div class="rank">الإنجازات</div>
+      <ul class="ach-list" id="achList"></ul>
+      <button class="btn ghost" id="achBack">رجوع</button>
+    </div>
+
+    <div class="overlay" id="boardScreen" hidden>
+      <div class="board" id="boardFull"></div>
+      <button class="btn ghost" id="boardBack">رجوع</button>
+    </div>
+
+    <div class="overlay" id="startScreen">
+      <div class="logo" dir="ltr">AURA <span>RUSH</span></div>
+      <p class="tag">٥ مراحل، ٥ زعماء، وعرش واحد. اجمع هالة، كبّر الإيجو، واهزم الزعيم بكل مرحلة.</p>
+      <p class="challenge" id="challengeBox" hidden></p>
+      <div class="rules">
+        <div><span class="sw g"></span>ألماسة = هالة. اجمع ورا بعض عشان الكومبو.</div>
+        <div><span class="sw c"></span>تاج = إيجو يضاعف كل شي. إذا وصل 100 بينفجر.</div>
+        <div><span class="sw r">L</span>كرنج = بتخسر قلب.</div>
+        <div><span class="sw b"></span>الزعيم: إنت بتضرب لحالك، تجنب رصاصه واعمل FLEX عليه.</div>
+        <div><span class="sw f"></span>FLEX فوق 80 = SUPER، وفوق 95 = PERFECT. بس انتبه للـ100.</div>
+        <div><kbd>Space</kbd> FLEX · <kbd>←</kbd><kbd>→</kbd> أو الماوس/اللمس · <kbd>P</kbd> إيقاف</div>
+      </div>
+      <div class="nick-row"><label for="nick">اسمك على العرش</label><input id="nick" maxlength="16" placeholder="مثلاً: سيغما_جو" autocomplete="off"></div>
+      <div class="chars" id="chars" role="group" aria-label="الشخصية"></div>
+      <p class="char-desc" id="charDesc"></p>
+      <div class="nick-row"><label for="titleSel">لقبك</label><select id="titleSel"></select></div>
+      <button class="btn" id="startBtn">ابدأ</button>
+      <div class="board" id="boardStart"></div>
+      <div class="links"><button class="btn ghost" data-board>أفضل 100</button><button class="btn ghost" id="achBtn">الإنجازات</button><a class="btn ghost" href="/leaderboard">لوحة الأبطال</a></div>
+    </div>
+
+    <div class="overlay" id="pauseScreen" hidden>
+      <div class="rank">متوقف</div>
+      <button class="btn" id="resumeBtn">كمّل</button>
+      <button class="btn ghost" id="quitBtn">ارجع للبداية</button>
+    </div>
+
+    <div class="overlay" id="overScreen" hidden>
+      <div class="tag">رتبتك</div>
+      <div class="rank" id="rank">NPC</div>
+      <p class="death" id="deathMsg"></p>
+      <p class="challenge" id="challengeResult" hidden></p>
+      <div class="stats">
+        <div><b id="finalScore">0</b>هالة</div>
+        <div><b id="finalLvl">1</b>المرحلة</div>
+        <div><b id="finalBoss">0</b>زعماء</div>
+        <div><b id="finalCombo">0</b>أعلى كومبو</div>
+      </div>
+      <p class="status" id="status"></p>
+      <button class="btn" id="againBtn">مرة كمان</button>
+      <div class="links"><button class="btn ghost" id="shareBtn">تحدّى صحابك</button><a class="btn ghost" href="/leaderboard">لوحة الأبطال</a></div>
+      <div class="board" id="boardOver"></div>
+      <button class="btn ghost" data-board>أفضل 100</button>
+    </div>
+  </div>
+
+  <button id="flex" dir="ltr"><span class="charge" id="flexCharge"></span><span class="lbl" id="flexLabel">FLEX</span></button>
+</div>
+
+<script src="game.js" defer></script>
+</body>
+</html>
