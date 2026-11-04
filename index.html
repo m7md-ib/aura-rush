@@ -141,6 +141,31 @@ kbd{font-family:var(--body);font-weight:800;font-size:12px;border:1px solid var(
 #flex.banned{filter:grayscale(1);opacity:.55}
 .links{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 a.btn{text-decoration:none;display:inline-block}
+/* ---- accounts ---- */
+input{-webkit-user-select:text;user-select:text}
+.vf{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;background:var(--cyan);color:var(--ink);font:800 10px/1 var(--body);margin-inline-end:5px;vertical-align:1px}
+.who{margin:0;font-size:15px;font-weight:800;color:var(--muted)}
+.who b{color:var(--text)}
+.btn.small{font-size:16px;padding:6px 16px}
+.tabs2{display:flex;background:var(--ink2);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px}
+.tabs2 button{font:800 15px var(--body);color:var(--muted);background:none;border:0;border-radius:9px;padding:8px 18px;cursor:pointer;touch-action:manipulation}
+.tabs2 button[aria-pressed="true"]{background:var(--line);color:var(--gold)}
+.acct-form{display:grid;gap:10px;width:min(320px,100%);text-align:start}
+.acct-form label{display:grid;gap:4px;font-weight:800;color:var(--muted);font-size:14px}
+.acct-form input{font:700 16px var(--body);background:var(--ink2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;box-sizing:border-box}
+.acct-form input:focus{border-color:var(--gold)}
+.acct-form .btn{justify-self:center;margin-top:4px}
+.acct-hint{margin:0;font-size:12px;color:var(--muted);line-height:1.5}
+.acct-err{margin:0;font-size:14px;font-weight:800;color:var(--cringe);min-height:1.2em}
+.acct-hint:empty{display:none}
+.link-btn{background:none;border:0;color:var(--cyan);font:700 14px var(--body);text-decoration:underline;cursor:pointer;padding:4px}
+.recov{display:grid;gap:10px;justify-items:center;max-width:340px}
+.recov p{margin:0;font-size:15px;line-height:1.6}
+.recov .warn{background:rgba(255,79,123,.12);border:1px solid var(--cringe);border-radius:12px;padding:10px 12px;font-size:14px;font-weight:700}
+.code{font:400 34px/1 var(--display);letter-spacing:.12em;color:var(--gold);background:var(--ink2);border:2px dashed var(--gold);border-radius:14px;padding:14px 18px;-webkit-user-select:all;user-select:all}
+.acct-me{display:grid;gap:10px;justify-items:center}
+.acct-me p{margin:0;font-size:17px}
+.save-hint{margin:0;font-size:13px;color:var(--muted);max-width:32ch}
 </style>
 </head>
 <body>
@@ -169,6 +194,36 @@ a.btn{text-decoration:none;display:inline-block}
       <button class="btn ghost" id="achBack">رجوع</button>
     </div>
 
+    <div class="overlay" id="acctScreen" hidden>
+      <div class="rank" id="acctTitle">دخول</div>
+      <div class="tabs2" id="acctTabs" role="group" aria-label="نوع الدخول">
+        <button type="button" data-mode="login" aria-pressed="true">دخول</button>
+        <button type="button" data-mode="signup" aria-pressed="false">حساب جديد</button>
+      </div>
+      <form class="acct-form" id="acctForm" novalidate>
+        <label>اسم المستخدم<input id="aUser" name="username" autocomplete="username" maxlength="16" dir="auto" spellcheck="false" autocapitalize="off" autocorrect="off"></label>
+        <label id="aRecRow" hidden>كود الاسترجاع<input id="aRec" maxlength="10" dir="ltr" autocomplete="off" autocapitalize="characters" spellcheck="false" autocorrect="off"></label>
+        <label><span id="aPassLbl">كلمة السر</span><input id="aPass" name="password" type="password" autocomplete="current-password" maxlength="72" dir="ltr"></label>
+        <p class="acct-hint" id="aHint"></p>
+        <p class="acct-err" id="aErr" role="alert"></p>
+        <button class="btn" id="aSubmit" type="submit">ادخل</button>
+      </form>
+      <button class="link-btn" id="aForgot" type="button">نسيت كلمة السر؟</button>
+      <div class="recov" id="aRecov" hidden>
+        <p id="aRecLead"></p>
+        <div class="code" id="aCode" dir="ltr"></div>
+        <p class="warn">احفظه هلأ: صوّره أو انسخه. إذا نسيت كلمة السر، هاد الكود هو الطريقة الوحيدة ترجع حسابك، وما رح يطلعلك مرة ثانية.</p>
+        <button class="btn ghost small" id="aCopy" type="button">انسخ الكود</button>
+        <button class="btn" id="aSaved" type="button">حفظته، يلا نلعب</button>
+      </div>
+      <div class="acct-me" id="aMe" hidden>
+        <p>داخل باسم <span class="vf" aria-hidden="true">✓</span><b id="aMeName"></b></p>
+        <a class="btn ghost small" id="aProfile" href="/profile">صفحتي</a>
+        <button class="btn ghost small" id="aLogout" type="button">اطلع من الحساب</button>
+      </div>
+      <button class="btn ghost" id="acctBack" type="button">رجوع</button>
+    </div>
+
     <div class="overlay" id="boardScreen" hidden>
       <div class="board" id="boardFull"></div>
       <button class="btn ghost" id="boardBack">رجوع</button>
@@ -186,7 +241,9 @@ a.btn{text-decoration:none;display:inline-block}
         <div><span class="sw f"></span>FLEX فوق 80 = SUPER، وفوق 95 = PERFECT. بس انتبه للـ100.</div>
         <div><kbd>Space</kbd> FLEX · <kbd>←</kbd><kbd>→</kbd> أو الماوس/اللمس · <kbd>P</kbd> إيقاف</div>
       </div>
-      <div class="nick-row"><label for="nick">اسمك على العرش</label><input id="nick" maxlength="16" placeholder="مثلاً: سيغما_جو" autocomplete="off"></div>
+      <div class="nick-row" id="nickRow"><label for="nick">اسمك على العرش</label><input id="nick" maxlength="16" placeholder="مثلاً: سيغما_جو" autocomplete="off"></div>
+      <p class="who" id="whoRow" hidden>بتلعب باسم <span class="vf" aria-hidden="true">✓</span><b id="whoName"></b></p>
+      <button class="btn ghost small" id="acctBtn" type="button">سجّل حساب / ادخل</button>
       <div class="chars" id="chars" role="group" aria-label="الشخصية"></div>
       <p class="char-desc" id="charDesc"></p>
       <div class="nick-row"><label for="titleSel">لقبك</label><select id="titleSel"></select></div>
@@ -214,6 +271,8 @@ a.btn{text-decoration:none;display:inline-block}
       </div>
       <p class="status" id="status"></p>
       <button class="btn" id="againBtn">مرة كمان</button>
+      <p class="save-hint" id="saveHint">سجّل حساب عشان نتايجك وألقابك تنحفظ وتاخد علامة ✓ على العرش.</p>
+      <button class="btn ghost small" id="saveBtn" type="button">احفظ تقدّمك بحساب</button>
       <div class="links"><button class="btn ghost" id="shareBtn">تحدّى صحابك</button><a class="btn ghost" href="/leaderboard">لوحة الأبطال</a></div>
       <div class="board" id="boardOver"></div>
       <button class="btn ghost" data-board>أفضل 100</button>

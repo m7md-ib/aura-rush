@@ -83,15 +83,21 @@ const ACH = [
   { id:'hunter',   name:'Secret Hunter',   title:'صياد الأسرار',   desc:'اهزم زعيم سري' },
   { id:'legend',   name:'Legend',          title:'الأسطورة',       desc:'اهزم الأورا الأصلية' },
 ];
+/* Achievements are granted by the server. srv = ids the server says we own (null until loaded / offline → local fallback).
+   During a run, unlocks are collected in S.claims and sent with the score; the server re-checks them. */
 const Ach = {
   d: Object.assign({ got:{}, near:0, time:0 }, store.get('auraAch', {})),
+  srv: null,
   save(){ store.set('auraAch', this.d); },
-  has(id){ return !!this.d.got[id]; },
+  has(id){ return this.srv ? this.srv.has(id) : !!this.d.got[id]; },
+  setServer(list){ this.srv = new Set((list || []).filter(id => ACH.some(a => a.id === id))); renderTitles(); },
   unlock(id){
-    if (this.has(id)) return; this.d.got[id] = Date.now(); this.save();
+    if (S && S.claims) S.claims.add(id);
+    if (!this.d.got[id]){ this.d.got[id] = Date.now(); this.save(); if (!this.srv) renderTitles(); }
+    if (this.has(id) || (S && S.toasted && S.toasted.has(id))) return;
+    if (this.srv && (id === 'grass' || id === 'survivor')) return;   // totals: the server decides after the run
     const a = ACH.find(x => x.id === id);
-    if (a && S){ S.toast = { txt:'إنجاز جديد: ' + a.name + ' · لقب «' + a.title + '»', t:0 }; Sound.refund(); }
-    renderTitles();
+    if (a && S){ if (S.toasted) S.toasted.add(id); S.toast = { txt:'إنجاز جديد: ' + a.name + ' · لقب «' + a.title + '»', t:0 }; Sound.refund(); }
   },
   tick(dt){ if (!S || !S.run || S.paused) return; this.d.time += dt; this._s = (this._s || 0) + dt; if (this._s > 10){ this._s = 0; this.save(); } if (this.d.time >= 1800) this.unlock('grass'); },
   near(){ this.d.near++; if (this.d.near >= 50) this.unlock('survivor'); },
@@ -226,14 +232,50 @@ function playerId(){
   }
   return id;
 }
+const UID = playerId();
+/* ---------- accounts: username + password, session token in localStorage ---------- */
+const AUTH_ERR = [
+  [/bad username/, 'الاسم لازم يكون من 3 لـ16 حرف: عربي أو إنجليزي أو أرقام أو _ (بدون مسافات)'],
+  [/bad password/, 'كلمة السر لازم تكون 6 أحرف أو أكثر'],
+  [/username taken/, 'هالاسم مأخوذ، جرّب غيره'],
+  [/too many signups/, 'عملت حسابات كثير من هالجهاز. استنى ساعة وجرّب'],
+  [/wrong login/, 'الاسم أو كلمة السر غلط'],
+  [/locked/, 'محاولات غلط كثير. استنى ربع ساعة وجرّب كمان مرة'],
+  [/wrong recovery/, 'كود الاسترجاع غلط'],
+];
+const authMsg = e => (AUTH_ERR.find(([re]) => re.test(e && e.message || '')) || [0, 'في مشكلة بالنت. جرّب كمان مرة'])[1];
+const Acct = {
+  token: store.get('auraToken', null), user: store.get('auraUser', null),
+  get signedIn(){ return !!(this.token && this.user); },
+  set(token, user){ this.token = token || null; this.user = token ? user : null; store.set('auraToken', this.token); store.set('auraUser', this.user); renderAcct(); },
+  /* who am I + achievements. First run after this update: import the achievements this device earned before accounts existed. */
+  async sync(){
+    try {
+      if (!store.get('auraAchImported', false)){
+        const ids = Object.keys(Ach.d.got).filter(id => ACH.some(a => a.id === id));
+        if (ids.length) await rpc('import_legacy_achievements', { p_player:UID, p_achs:ids });
+        store.set('auraAchImported', true);
+      }
+      const m = await rpc('me', { p_token:this.token, p_player:UID });
+      if (this.token && !m.signed_in) this.set(null);
+      else if (m.signed_in && m.username !== this.user) this.set(this.token, m.username);
+      Ach.setServer(m.achievements);
+    } catch(e){}
+  },
+  async after(r){ this.set(r.token, r.username); await this.sync(); Board.refresh(); },
+  async signup(u, p){ const r = await rpc('signup', { p_username:u, p_password:p, p_player:UID }); await this.after(r); return r.recovery; },
+  async login(u, p){ await this.after(await rpc('login', { p_username:u, p_password:p, p_player:UID })); },
+  async reset(u, code, p){ const r = await rpc('reset_password', { p_username:u, p_recovery:code, p_new:p }); await this.after(r); return r.recovery; },
+  async logout(){ const t = this.token; this.set(null); try { await rpc('logout', { p_token:t }); } catch(e){} await this.sync(); Board.refresh(); }
+};
 const Board = {
-  rows:[], shared:false, me:null, uid:playerId(),
+  rows:[], shared:false, me:null, uid:UID,
   local(){ return store.get('auraBoard', []); },
   async refresh(){
     try {
-      const rows = await rpc('get_leaderboard_v2', { p_limit:100, p_player:this.uid, p_period:'all' });
-      this.rows = (rows || []).map(r => ({ nick:String(r.nick || '').slice(0,16), score:Math.max(0, +r.score || 0), level:+r.level || 1, isMe:!!r.is_me, title:String(r.title || '').slice(0,24) }));
-      this.me = await rpc('get_my_rank', { p_player:this.uid, p_period:'all' });
+      const rows = await rpc('get_leaderboard_v3', { p_limit:100, p_player:this.uid, p_period:'all', p_token:Acct.token });
+      this.rows = (rows || []).map(r => ({ nick:String(r.nick || '').slice(0,16), score:Math.max(0, +r.score || 0), level:+r.level || 1, isMe:!!r.is_me, title:String(r.title || '').slice(0,24), verified:!!r.verified }));
+      this.me = await rpc('get_my_rank_v3', { p_player:this.uid, p_period:'all', p_token:Acct.token });
       this.shared = true;
     } catch(e){ this.shared = false; }
     renderBoards();
@@ -242,11 +284,13 @@ const Board = {
   async submit(entry){
     const loc = this.local(); loc.push(entry); loc.sort((a,b) => b.score - a.score); store.set('auraBoard', loc.slice(0,5));
     try {
-      const r = await rpc('submit_score', { p_player:this.uid, p_nick:entry.nick, p_score:entry.score, p_level:entry.level, p_bosses:entry.bosses, p_duration:entry.duration, p_character:entry.character, p_title:entry.title || null });
+      const r = await rpc('submit_score_v3', { p_player:this.uid, p_token:Acct.token, p_nick:entry.nick, p_score:entry.score, p_level:entry.level, p_bosses:entry.bosses,
+        p_duration:entry.duration, p_character:entry.character, p_title:entry.title || null, p_achs:entry.claims || [], p_near:entry.near || 0 });
+      if (r && r.achievements) Ach.setServer(r.achievements);
       await this.refresh();
-      return { status: r && r.new_best ? 'ok' : 'notbest', rank: r && r.rank };
+      return { status: r && r.new_best ? 'ok' : 'notbest', rank: r && r.rank, fresh: (r && r.new_achievements) || [] };
     } catch(e){
-      return { status: /plausible|too fast|bad /.test(e.message) ? 'rejected' : /too many/.test(e.message) ? 'slow' : 'local' };
+      return { status: /plausible|too fast|bad /.test(e.message) ? 'rejected' : /too many/.test(e.message) ? 'slow' : 'local', fresh:[] };
     }
   }
 };
@@ -286,15 +330,18 @@ function renderBoards(){
     const ol = document.createElement('ol');
     rows.slice(0, useShared ? max : 5).forEach((r, i) => {
       const li = document.createElement('li'); if (useShared && r.isMe) li.className = 'me';
-      const cells = [['p', i === 0 ? '♛' : String(i+1)], ['n', (r.nick || 'لاعب مجهول') + (r.title ? ' «' + r.title + '»' : '')], ['lv', 'م' + r.level], ['s', String(r.score)]];
+      const nick = r.verified ? r.nick : String(r.nick || '').replace(/[✓✔☑✅]/g, '');   // only real accounts get the badge
+      const cells = [['p', i === 0 ? '♛' : String(i+1)], ['n', (nick || 'لاعب مجهول') + (r.title ? ' «' + r.title + '»' : '')], ['lv', 'م' + r.level], ['s', String(r.score)]];
       cells.forEach(([c, t]) => { const s = document.createElement('span'); s.className = c; s.textContent = t; li.appendChild(s); });
+      if (useShared && r.verified){ const v = document.createElement('b'); v.className = 'vf'; v.textContent = '✓'; v.title = 'حساب مسجّل'; li.children[1].prepend(v); }
       ol.appendChild(li);
     });
     el.appendChild(ol);
     if (useShared && Board.me && Board.me.rank > Math.min(max, rows.length)){ const p = document.createElement('div'); p.className = 'empty'; p.textContent = 'ترتيبك: #' + Board.me.rank + ' · أفضل نتيجة ' + Board.me.best; el.appendChild(p); }
   });
 }
-renderBoards(); Board.init(); Challenge.load();
+renderBoards(); Challenge.load();
+Acct.sync().then(() => Board.init());
 function renderChars(){
   const el = $('chars'); el.textContent = '';
   Object.entries(CHARS).forEach(([id, c]) => {
@@ -317,6 +364,71 @@ renderChars(); renderTitles();
 $('titleSel').addEventListener('change', e => store.set('auraTitle', e.target.value));
 $('achBtn').addEventListener('click', () => { renderTitles(); $('startScreen').hidden = true; $('achScreen').hidden = false; $('achBack').focus(); });
 $('achBack').addEventListener('click', () => { $('achScreen').hidden = true; $('startScreen').hidden = false; });
+
+/* ---------- account screen: login / signup / forgot password / recovery code / signed-in ---------- */
+const A = { scr:$('acctScreen'), tabs:$('acctTabs'), form:$('acctForm'), user:$('aUser'), pass:$('aPass'), passLbl:$('aPassLbl'), rec:$('aRec'), recRow:$('aRecRow'),
+  hint:$('aHint'), err:$('aErr'), submit:$('aSubmit'), forgot:$('aForgot'), recov:$('aRecov'), code:$('aCode'), me:$('aMe'), back:$('acctBack') };
+const ACCT_UI = {
+  login:  { title:'دخول', btn:'ادخل', pass:'كلمة السر', hint:'' },
+  signup: { title:'حساب جديد', btn:'سجّل', pass:'كلمة السر', hint:'الاسم من 3 لـ16 حرف (عربي أو إنجليزي أو أرقام أو _). كلمة السر 6 أحرف أو أكثر. ما بدنا إيميل.' },
+  reset:  { title:'نسيت كلمة السر', btn:'غيّر كلمة السر', pass:'كلمة السر الجديدة', hint:'اكتب اسمك وكود الاسترجاع اللي حفظته لما سجّلت، وكلمة سر جديدة.' },
+};
+let acctMode = 'login', acctFrom = null;
+function acctShow(mode){
+  acctMode = mode;
+  const ui = ACCT_UI[mode];
+  $('acctTitle').textContent = ui ? ui.title : mode === 'recov' ? 'احفظ هالكود' : 'حسابك';
+  A.tabs.hidden = !(mode === 'login' || mode === 'signup');
+  A.tabs.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  A.form.hidden = !ui; A.forgot.hidden = mode !== 'login'; A.recov.hidden = mode !== 'recov'; A.me.hidden = mode !== 'me';
+  A.back.hidden = mode === 'recov';
+  if (ui){
+    A.recRow.hidden = mode !== 'reset';
+    A.pass.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+    A.passLbl.textContent = ui.pass; A.hint.textContent = ui.hint; A.err.textContent = '';
+    A.submit.textContent = ui.btn; A.submit.disabled = false;
+  }
+  if (mode === 'me'){ $('aMeName').textContent = Acct.user; $('aProfile').href = '/profile?u=' + encodeURIComponent(Acct.user); }
+}
+function openAcct(){
+  acctFrom = [...document.querySelectorAll('#stage .overlay')].find(o => !o.hidden && o !== A.scr) || $('startScreen');
+  acctFrom.hidden = true; A.scr.hidden = false; A.scr.scrollTop = 0;
+  acctShow(Acct.signedIn ? 'me' : 'login');
+  if (!Acct.signedIn && !Input.isTouchUI()) A.user.focus(); else A.back.focus();
+}
+function closeAcct(){ A.scr.hidden = true; A.pass.value = ''; A.rec.value = ''; (acctFrom || $('startScreen')).hidden = false; }
+A.tabs.addEventListener('click', e => { const b = e.target.closest('button'); if (b) acctShow(b.dataset.mode); });
+A.forgot.addEventListener('click', () => acctShow('reset'));
+A.back.addEventListener('click', () => acctMode === 'reset' ? acctShow('login') : closeAcct());
+A.form.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (A.submit.disabled) return;
+  const mode = acctMode, u = A.user.value.trim(), p = A.pass.value, code = A.rec.value.trim();
+  if (!u || !p || (mode === 'reset' && !code)){ A.err.textContent = mode === 'reset' ? 'عبّي الاسم والكود وكلمة السر الجديدة' : 'اكتب الاسم وكلمة السر'; return; }
+  A.err.textContent = ''; A.submit.disabled = true; A.submit.textContent = 'لحظة...';
+  try {
+    if (mode === 'login'){ await Acct.login(u, p); closeAcct(); return; }
+    const rc = mode === 'signup' ? await Acct.signup(u, p) : await Acct.reset(u, code, p);
+    A.pass.value = ''; A.rec.value = '';
+    $('aRecLead').textContent = mode === 'signup' ? 'أهلاً ' + Acct.user + '! هاد كود الاسترجاع تبعك:' : 'تغيّرت كلمة السر. هاد كود الاسترجاع الجديد تبعك (القديم ما عاد يشتغل):';
+    A.code.textContent = rc; acctShow('recov'); $('aCopy').focus();
+  } catch(err){ A.err.textContent = authMsg(err); A.submit.disabled = false; A.submit.textContent = ACCT_UI[mode].btn; }
+});
+$('aCopy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(A.code.textContent); $('aCopy').textContent = 'انتسخ ✓'; }
+  catch(e){ const r = document.createRange(); r.selectNodeContents(A.code); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+});
+$('aSaved').addEventListener('click', () => { A.code.textContent = ''; $('aCopy').textContent = 'انسخ الكود'; closeAcct(); });
+$('aLogout').addEventListener('click', async () => { $('aLogout').disabled = true; await Acct.logout(); $('aLogout').disabled = false; closeAcct(); });
+$('acctBtn').addEventListener('click', openAcct);
+$('saveBtn').addEventListener('click', openAcct);
+function renderAcct(){
+  const on = Acct.signedIn;
+  $('nickRow').hidden = on; $('whoRow').hidden = !on; if (on) $('whoName').textContent = Acct.user;
+  $('acctBtn').textContent = on ? 'حسابي' : 'سجّل حساب / ادخل';
+  $('saveBtn').hidden = on; $('saveHint').hidden = on;
+}
+renderAcct();
 
 /* ---------- canvas setup ---------- */
 let W = 0, H = 0;
@@ -369,7 +481,7 @@ function newState(){
     nearCD:0, nearMisses:0, heartT:0, lastHit:null, lastBoomT:-99, egoWarn:false, egoTickT:0,
     phil:null, corruptT:0, eclipseT:0, intro:null, forceHeart:false,
     char:charId, title:(t => Ach.titles().includes(t) ? t : '')(store.get('auraTitle', '')), shield:0, magnetT:0, freezeT:0, puCD:8, toast:null, banT:0,
-    hitThisBoss:false, blackoutCD:20, beams:[], secret:null };
+    hitThisBoss:false, blackoutCD:20, beams:[], secret:null, claims:new Set(), toasted:new Set() };
 }
 const mult = () => S.ego >= 67 ? 3 : S.ego >= 34 ? 2 : 1;
 
@@ -378,7 +490,7 @@ function start(){
   const nick = $('nick').value.trim().slice(0,16); store.set('auraNick', nick);
   S = newState(); P.x = P.tx = P.px = W/2; P.kv = 0;
   if (S.char === 'menace') S.lives = 2;
-  ['startScreen','overScreen','pauseScreen','achScreen','boardScreen'].forEach(id => $(id).hidden = true);
+  ['startScreen','overScreen','pauseScreen','achScreen','boardScreen','acctScreen'].forEach(id => $(id).hidden = true);
   renderLives(); banner('المرحلة 1', S.cfg.name); Sound.setMode('level', 0); Sound.level(); Sound.startMusic();
   stage.focus && stage.focus();
 }
@@ -409,16 +521,19 @@ async function gameOver(){
     ch.hidden = false;
   } else ch.hidden = true;
   $('overScreen').hidden = false; $('againBtn').focus();
-  const nick = $('nick').value.trim().slice(0,16) || 'لاعب مجهول';
+  const nick = Acct.signedIn ? Acct.user : ($('nick').value.trim().slice(0,16) || 'لاعب مجهول');
   lastRun = { score:a, rank:null };
   $('status').textContent = 'عم نرفع نتيجتك...';
-  const res = await Board.submit({ nick, score:a, level:S.cfg.num, bosses:S.bosses, duration:Math.max(3, Math.round(S.t)), character:S.char, title:S.title });
+  const res = await Board.submit({ nick, score:a, level:S.cfg.num, bosses:S.bosses, duration:Math.max(3, Math.round(S.t)), character:S.char, title:S.title,
+    claims:[...S.claims], near:S.nearMisses });
   lastRun.rank = res.rank || null;
-  $('status').textContent = res.status === 'ok' ? 'رقم جديد! ترتيبك على العرش #' + res.rank
-    : res.status === 'notbest' ? 'رقمك القديم أعلى. ترتيبك #' + res.rank
+  const fresh = ACH.filter(x => res.fresh.includes(x.id)).map(x => '«' + x.title + '»');
+  $('status').textContent = (res.status === 'ok' ? 'رقم جديد! ترتيبك على العرش #' + res.rank
+    : res.status === 'notbest' ? 'رقمك القديم أعلى' + (res.rank ? '. ترتيبك #' + res.rank : '')
     : res.status === 'rejected' ? 'النتيجة ما عدّت فحص الغش'
     : res.status === 'slow' ? 'استنى شوي بين كل لعبة والثانية'
-    : 'ما في اتصال، انحفظت نتيجتك على جهازك';
+    : 'ما في اتصال، انحفظت نتيجتك على جهازك')
+    + (fresh.length ? ' · لقب جديد: ' + fresh.join('، ') : '');
 }
 function renderLives(){
   livesEl.textContent = '';
@@ -1280,6 +1395,7 @@ cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.addEventListener('touchmove', e => e.preventDefault(), { passive:false });   // older iOS: no page scroll while dragging
 document.addEventListener('gesturestart', e => { if (S && S.run) e.preventDefault(); });
 addEventListener('keydown', e => {
+  if (!$('acctScreen').hidden) return;   // account forms handle their own keys
   if (e.target && e.target.tagName === 'INPUT'){ if (e.key === 'Enter'){ e.preventDefault(); start(); } return; }
   const k = e.key;
   if (k === 'ArrowLeft' || k === 'a' || k === 'A') keys.left = true;

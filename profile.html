@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>صفحة لاعب · Aura Rush</title>
+<meta name="description" content="صفحة لاعب بـ Aura Rush: أعلى نتيجة، الترتيب، الإنجازات وآخر الجولات.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@400;700;800&display=swap">
+<style>
+/* Layout: player card (name, title, join date) → stat grid → achievements grid → recent runs table */
+:root{
+  --ink:#110a22; --ink2:#1c1336; --ink3:#251a45; --line:#3a2c66;
+  --gold:#ffc94d; --cyan:#6ee7ff; --cringe:#ff4f7b;
+  --text:#f4effe; --muted:#a99ecb;
+  --display:'Lalezar','Tajawal',system-ui,sans-serif; --body:'Tajawal',system-ui,sans-serif;
+  color-scheme:dark;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--text);font-family:var(--body);font-size:15px;
+  background-image:radial-gradient(ellipse at 50% -10%, rgba(110,231,255,.12), transparent 60%)}
+.wrap{max-width:860px;margin:0 auto;padding-block:24px 48px;
+  padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));display:grid;gap:22px}
+nav{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+nav a{color:var(--muted);font-weight:800;text-decoration:none}
+nav a:hover,nav a:focus-visible{color:var(--cyan);outline:none}
+.play{font-family:var(--display);font-size:20px;padding:8px 24px;border-radius:14px;background:var(--gold);color:var(--ink)!important;box-shadow:0 0 24px rgba(255,201,77,.35)}
+.card{background:var(--ink2);border:1px solid var(--line);border-radius:18px;padding:20px;display:grid;gap:6px}
+h1{margin:0;font-family:var(--display);font-weight:400;font-size:clamp(36px,9vw,56px);line-height:1.05;color:var(--gold);text-shadow:0 0 26px rgba(255,201,77,.4);overflow-wrap:anywhere}
+.vf{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--cyan);color:var(--ink);font:800 16px/1 var(--body);margin-inline-end:10px;vertical-align:8px;text-shadow:none}
+.ttl{color:var(--cyan);font-weight:800;font-size:16px;margin:0}
+.joined{color:var(--muted);font-size:14px;margin:0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.stat{background:var(--ink2);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.stat b{display:block;font-family:var(--display);font-weight:400;font-size:28px;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:13px;font-weight:700}
+.stat.hi{border-color:var(--gold)} .stat.hi b{color:var(--gold)}
+h2{margin:0 0 10px;font-family:var(--display);font-weight:400;font-size:26px;color:var(--text)}
+h2 small{font-family:var(--body);font-size:14px;color:var(--muted);font-weight:800}
+.achs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;list-style:none;margin:0;padding:0}
+.achs li{background:var(--ink2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;opacity:.5}
+.achs li.got{opacity:1;border-color:var(--gold)}
+.achs b{display:block;font-family:var(--display);font-weight:400;font-size:18px;color:var(--muted)}
+.achs li.got b{color:var(--gold)}
+.achs span{display:block;font-size:12px;color:var(--muted)}
+.achs i{display:block;font-style:normal;font-size:12px;font-weight:800;color:var(--text);margin-top:3px}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--ink2)}
+table{width:100%;border-collapse:collapse;min-width:420px}
+th{font-size:12px;font-weight:800;color:var(--muted);text-align:start;padding:10px 12px;border-bottom:1px solid var(--line)}
+td{padding:9px 12px;border-bottom:1px solid rgba(58,44,102,.5);font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+td.s{font-family:var(--display);font-size:19px;color:var(--gold)}
+td.m{color:var(--muted);font-size:13px;white-space:nowrap}
+.note{color:var(--muted);text-align:center;padding:28px 12px;margin:0}
+.missing{text-align:center;display:grid;gap:12px;justify-items:center;padding:40px 0}
+.missing p{margin:0;color:var(--muted);font-size:17px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav><a href="/leaderboard">→ عرش الـAURA</a><a class="play" href="/">العب هلأ</a></nav>
+  <div id="main"><p class="note">عم نحمّل...</p></div>
+</div>
+<script>
+(() => {
+const SB_URL = 'https://neciihvhzlxqijgfddmw.supabase.co', SB_KEY = 'sb_publishable_JLUNUppVVhSm5wglgE7QdA_klJ6Jdgt';
+async function rpc(fn, body){
+  const r = await fetch(SB_URL + '/rest/v1/rpc/' + fn, { method:'POST', headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body:JSON.stringify(body || {}) });
+  if (!r.ok) throw new Error(await r.text());
+  const t = await r.text(); return t ? JSON.parse(t) : null;
+}
+const CHARS = { sigma:'Sigma', menace:'The Menace', magnet:'The Magnet', ghost:'The Ghost', gambler:'The Gambler' };
+const ACH = [
+  { id:'first',    name:'First Aura',      title:'جديد بالحارة',   desc:'اجمع 100 هالة بجولة' },
+  { id:'combo50',  name:'Combo Machine',   title:'ماكينة كومبو',   desc:'وصّل كومبو 50' },
+  { id:'sigma',    name:'Sigma Mode',      title:'سيغما',          desc:'اعمل PERFECT FLEX' },
+  { id:'untouch',  name:'Untouchable',     title:'ما بنلمس',       desc:'اهزم زعيم بدون ولا ضربة' },
+  { id:'slayer',   name:'Boss Slayer',     title:'قاتل الزعماء',   desc:'اهزم 5 زعماء بجولة وحدة' },
+  { id:'survivor', name:'Cringe Survivor', title:'ناجي من الكرنج', desc:'50 Near Miss (مجموع)' },
+  { id:'ascend',   name:'Ascension',       title:'ما بيوقف',       desc:'وصّل التصعيد الأول' },
+  { id:'king',     name:'Aura King',       title:'ملك الهالة',     desc:'اجمع 20,000 هالة بجولة' },
+  { id:'grass',    name:'Touch Grass',     title:'اطلع شم هوا',    desc:'العب 30 دقيقة (مجموع)' },
+  { id:'hunter',   name:'Secret Hunter',   title:'صياد الأسرار',   desc:'اهزم زعيم سري' },
+  { id:'legend',   name:'Legend',          title:'الأسطورة',       desc:'اهزم الأورا الأصلية' },
+];
+const fmt = n => Number(n || 0).toLocaleString('en-US');
+const date = ts => new Date(ts).toLocaleDateString('ar-JO', { year:'numeric', month:'long', day:'numeric' });
+function ago(ts){
+  const s = (Date.now() - new Date(ts).getTime())/1000;
+  if (s < 60) return 'هلأ'; if (s < 3600) return 'قبل ' + Math.floor(s/60) + ' د';
+  if (s < 86400) return 'قبل ' + Math.floor(s/3600) + ' س'; return 'قبل ' + Math.floor(s/86400) + ' يوم';
+}
+function playtime(sec){
+  const m = Math.round((sec || 0)/60); if (m < 60) return m + ' د';
+  return Math.floor(m/60) + ' س ' + (m % 60) + ' د';
+}
+function el(tag, cls, text){ const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+const main = document.getElementById('main');
+
+function missing(msg){
+  main.textContent = '';
+  const d = el('div', 'missing'); d.append(el('p', '', msg));
+  const a = el('a', 'play', 'ارجع للعرش'); a.href = '/leaderboard'; d.append(a);
+  main.append(d);
+}
+
+function render(p){
+  document.title = p.username + ' · Aura Rush';
+  main.textContent = '';
+  const box = el('div'); box.style.display = 'grid'; box.style.gap = '22px';
+
+  const card = el('section', 'card');
+  const h = el('h1'); const v = el('span', 'vf', '✓'); v.title = 'حساب مسجّل'; h.append(v, p.username); card.append(h);
+  if (p.title) card.append(el('p', 'ttl', '«' + p.title + '»'));
+  card.append(el('p', 'joined', 'معنا من ' + date(p.joined)));
+  box.append(card);
+
+  const stats = el('section', 'stats'); stats.setAttribute('aria-label', 'إحصائيات');
+  [[p.best != null ? fmt(p.best) : '–', 'أعلى نتيجة', true], [p.rank ? '#' + p.rank : '–', 'الترتيب على العرش', true],
+   [fmt(p.runs), 'جولة'], [fmt(p.bosses), 'زعيم انهزم'], [p.max_level || '–', 'أبعد مرحلة'],
+   [playtime(p.playtime), 'وقت اللعب'], [CHARS[p.fav_character] || '–', 'الشخصية المفضلة']
+  ].forEach(([val, lbl, hi]) => { const s = el('div', 'stat' + (hi ? ' hi' : '')); s.append(el('b', '', val), el('span', '', lbl)); stats.append(s); });
+  box.append(stats);
+
+  const got = new Map((p.achievements || []).map(a => [a.id, a.at]));
+  const as = el('section'); const h2 = el('h2', '', 'الإنجازات '); h2.append(el('small', '', got.size + ' من ' + ACH.length)); as.append(h2);
+  const ul = el('ul', 'achs');
+  ACH.slice().sort((a, b) => got.has(b.id) - got.has(a.id)).forEach(a => {
+    const li = el('li', got.has(a.id) ? 'got' : ''); li.append(el('b', '', a.name), el('span', '', a.desc));
+    li.append(el('i', '', got.has(a.id) ? 'لقب «' + a.title + '» · ' + date(got.get(a.id)) : 'مقفول'));
+    ul.append(li);
+  });
+  as.append(ul); box.append(as);
+
+  const rs = el('section'); rs.append(el('h2', '', 'آخر الجولات'));
+  const recent = p.recent || [];
+  if (!recent.length) rs.append(el('p', 'note', 'لسا ما لعب ولا جولة.'));
+  else {
+    const wrap = el('div', 'table-wrap'), t = el('table'), th = el('thead'), tr0 = el('tr');
+    ['الهالة', 'المرحلة', 'زعماء', 'الشخصية', 'متى'].forEach(x => tr0.append(el('th', '', x))); th.append(tr0); t.append(th);
+    const tb = el('tbody');
+    recent.forEach(r => { const tr = el('tr'); tr.append(el('td', 's', fmt(r.score)), el('td', 'm', r.level), el('td', 'm', r.bosses), el('td', 'm', CHARS[r.character] || ''), el('td', 'm', ago(r.created_at))); tb.append(tr); });
+    t.append(tb); wrap.append(t); rs.append(wrap);
+  }
+  box.append(rs);
+  main.append(box);
+}
+
+let u = ''; try { u = (new URLSearchParams(location.search).get('u') || '').trim(); } catch(e){}
+if (!u){ try { u = JSON.parse(localStorage.getItem('auraUser')) || ''; } catch(e){} }
+if (!u) missing('ما في اسم لاعب بالرابط.');
+else rpc('get_profile', { p_username:u.slice(0, 16) })
+  .then(p => p ? render(p) : missing('ما لقينا لاعب اسمه «' + u.slice(0, 16) + '».'))
+  .catch(() => missing('ما قدرنا نجيب الصفحة. جرّب كمان شوي.'));
+})();
+</script>
+</body>
+</html>
