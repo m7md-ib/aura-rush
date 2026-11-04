@@ -6,6 +6,7 @@
   -webkit-background-clip:text;background-clip:text;color:transparent;animation:nmRainbow 3s linear infinite}
 .nm-king{color:#ffc94d;text-shadow:0 0 8px rgba(255,201,77,.85),0 0 2px #fff3c4}
 @keyframes nmRainbow{to{background-position:200% 0}}
+.nm-grad,.nm-rainbow{text-shadow:none;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6))}
 
 .fr-gold{border:3px solid #ffc94d!important;box-shadow:0 0 26px rgba(255,201,77,.35)}
 .fr-neon{border:3px solid #6ee7ff!important;box-shadow:0 0 18px rgba(110,231,255,.7),inset 0 0 18px rgba(255,95,210,.35)}

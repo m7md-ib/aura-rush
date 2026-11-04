@@ -177,11 +177,14 @@ input{-webkit-user-select:text;user-select:text}
 .reward-note{margin:0;font-size:14px;font-weight:800;color:var(--ink);background:var(--cyan);border-radius:10px;padding:6px 12px;max-width:34ch}
 .btn.daily{animation:dailyPulse 1.6s ease-in-out infinite alternate}
 @keyframes dailyPulse{to{box-shadow:0 0 34px rgba(255,201,77,.75)}}
+#shopScreen > *,#acctScreen > *{flex-shrink:0}
+#shopTabs{flex-wrap:wrap;justify-content:center;max-width:100%}
+#shopTabs button{padding:7px 12px}
 .shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;width:min(620px,100%)}
 .item{display:grid;gap:4px;justify-items:center;background:var(--ink2);border:1px solid var(--line);border-radius:14px;padding:8px 8px 10px;text-align:center;min-width:0}
 .item.on{box-shadow:0 0 0 2px var(--cyan),0 0 18px rgba(110,231,255,.3)}
 .item.r-rare{border-color:rgba(110,231,255,.45)} .item.r-legendary{border-color:rgba(255,201,77,.6)} .item.r-mythic{border-color:rgba(255,95,210,.7);background:linear-gradient(180deg,rgba(255,95,210,.1),var(--ink2) 60%)}
-.item .pv{width:100%;height:96px;border-radius:10px;background:rgba(0,0,0,.18);display:block}
+.item .pv{width:100%;height:96px;border-radius:10px;background:rgba(0,0,0,.18);display:block;position:static;inset:auto}
 .item .pv-name{display:grid;place-items:center;font:800 19px var(--body);overflow:hidden;white-space:nowrap}
 .item .pv-sw{border:1px solid var(--line);box-sizing:border-box}
 .item .pv-frame{background:var(--ink)}

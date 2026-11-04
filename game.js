@@ -468,7 +468,7 @@ async function openShop(){
   Shop.from = [...document.querySelectorAll('#stage .overlay')].find(o => !o.hidden && o.id !== 'shopScreen') || $('startScreen');
   Shop.from.hidden = true; $('shopScreen').hidden = false; $('shopScreen').scrollTop = 0;
   $('shopNote').textContent = Acct.signedIn ? 'كل الأغراض شكل بس: ما بتغيّر اللعب ولا النقاط.' : 'سجّل حساب عشان تجمع عملات من اللعب وتشتري.';
-  $('shopLogin').hidden = Acct.signedIn;
+  $('shopLogin').hidden = Acct.signedIn; $('shopCoins').parentElement.hidden = !Acct.signedIn;
   $('shopGrid').textContent = ''; $('shopGrid').append(Object.assign(document.createElement('p'), { className:'empty', textContent:'عم نحمّل المتجر...' }));
   renderShopTabs();
   try { const d = await rpc('get_shop', { p_token:Acct.token }); Shop.items = (d && d.items) || []; if (d && d.coins != null) Acct.setCoins(d.coins); }
