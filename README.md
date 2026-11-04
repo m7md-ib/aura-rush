@@ -14,3 +14,4 @@
 
 ## النشر
 أي `push` على فرع `main` بينشر الموقع تلقائياً على Vercel.
+auto-deploy test
