@@ -109,6 +109,7 @@ const Sound = (() => {
     master = ac.createGain(); master.gain.value = muted ? 0 : .8; master.connect(ac.destination);
     music = ac.createGain(); music.gain.value = .32; music.connect(master);
     sfx = ac.createGain(); sfx.gain.value = .65; sfx.connect(master);
+    loadSamples();
     nbuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
     const d = nbuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random()*2 - 1;
   }
@@ -126,6 +127,25 @@ const Sound = (() => {
     s.buffer = nbuf; f.type = o.type || 'lowpass'; f.frequency.value = o.freq || 1000;
     g.gain.setValueAtTime(o.vol ?? .3, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
     s.connect(f); f.connect(g); g.connect(o.dest || sfx); s.start(t); s.stop(t + dur + .03);
+  }
+  /* Kenney CC0 samples (assets/sfx). Each event falls back to the synth if its file hasn't loaded. */
+  const SAMPLES = ['hit1','hit2','hit3','bhit1','bhit2','flex','sflex','pflex','rage','boom','intro','bdie','dark','crown','refund','level','heart','dcrown','deny','over','tele','steal','puff','secret','toggle','click'];
+  const buf = {};
+  function loadSamples(){
+    SAMPLES.forEach(n => {
+      fetch('assets/sfx/' + n + '.mp3').then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+        .then(a => new Promise((ok, no) => ac.decodeAudioData(a, ok, no)))
+        .then(b => { buf[n] = b; }).catch(() => {});
+    });
+  }
+  function samp(names, vol = .7, o = {}){
+    if (!ac) return false;
+    const list = Array.isArray(names) ? names : [names], n = list[Math.floor(Math.random()*list.length)], b = buf[n];
+    if (!b) return false;
+    const src = ac.createBufferSource(), g = ac.createGain();
+    src.buffer = b; src.playbackRate.value = (o.rate || 1) * (o.vary ? 1 + (Math.random() - .5) * o.vary : 1);
+    g.gain.value = vol; src.connect(g); g.connect(sfx); src.start(o.t ?? ac.currentTime);
+    return true;
   }
   function arp(notes, gap, o){ if (!ac) return; const t = ac.currentTime; notes.forEach((f,i) => tone(f, o.dur || .15, { ...o, t: t + i*gap })); }
 
@@ -161,31 +181,32 @@ const Sound = (() => {
     get muted(){ return muted; },
     toggle(){ muted = !muted; store.set('auraMute', muted); if (master) master.gain.value = muted ? 0 : .8; return muted; },
     setMode(m, l){ mode = m; lvl = l; },
+    click(){ samp('click', .5); },
     pickup(c){ tone(880 * Math.pow(2, Math.min(c, 18)/24), .09, { type:'triangle', vol:.2 }); },
-    crown(){ arp([523, 784, 1046], .06, { type:'square', vol:.08, dur:.16 }); },
-    darkCrown(){ arp([392, 311, 233], .07, { type:'sawtooth', vol:.1, dur:.18 }); },
-    heart(){ arp([660, 880, 1320], .07, { type:'triangle', vol:.15 }); },
-    hit(){ noise(.3, { vol:.5, freq:700 }); tone(180, .3, { type:'sawtooth', vol:.25, slide:50 }); },
-    flex(){ tone(180, .45, { type:'sawtooth', vol:.2, slide:1400 }); noise(.4, { type:'bandpass', freq:3000, vol:.25 }); },
-    superFlex(){ this.flex(); tone(2200, .3, { type:'triangle', vol:.12, slide:3200 }); },
-    perfectFlex(){ this.flex(); arp([784, 988, 1175, 1568, 1976], .05, { type:'triangle', vol:.16, dur:.22 }); },
-    deny(){ tone(140, .12, { vol:.1 }); },
+    crown(){ if (samp('crown', .55)) return; arp([523, 784, 1046], .06, { type:'square', vol:.08, dur:.16 }); },
+    darkCrown(){ if (samp('dcrown', .6)) return; arp([392, 311, 233], .07, { type:'sawtooth', vol:.1, dur:.18 }); },
+    heart(){ if (samp('heart', .6)) return; arp([660, 880, 1320], .07, { type:'triangle', vol:.15 }); },
+    hit(){ if (samp(['hit1','hit2','hit3'], .9, { vary:.1 })){ tone(180, .25, { type:'sawtooth', vol:.12, slide:50 }); return; } noise(.3, { vol:.5, freq:700 }); tone(180, .3, { type:'sawtooth', vol:.25, slide:50 }); },
+    flex(){ samp('flex', .55, { vary:.06 }); tone(180, .45, { type:'sawtooth', vol:.2, slide:1400 }); noise(.4, { type:'bandpass', freq:3000, vol:.25 }); },
+    superFlex(){ this.flex(); samp('sflex', .6); tone(2200, .3, { type:'triangle', vol:.12, slide:3200 }); },
+    perfectFlex(){ this.flex(); samp('pflex', .5); arp([784, 988, 1175, 1568, 1976], .05, { type:'triangle', vol:.16, dur:.22 }); },
+    deny(){ if (samp('deny', .35)) return; tone(140, .12, { vol:.1 }); },
     egoTick(e){ tone(500 + (e - 90)*70, .07, { vol:.06 }); },
-    egoBoom(){ noise(.8, { vol:.6, freq:300 }); tone(90, .7, { vol:.2, slide:30 }); },
+    egoBoom(){ samp('boom', .9); noise(.8, { vol:.6, freq:300 }); tone(90, .7, { vol:.2, slide:30 }); },
     near(){ noise(.09, { type:'bandpass', freq:2600, vol:.14 }); tone(1200, .08, { type:'triangle', vol:.06, slide:1900 }); },
-    tele(){ arp([440, 660], .12, { type:'triangle', vol:.12, dur:.14 }); },
-    intro(){ if (!ac) return; noise(1.4, { vol:.55, freq:180 }); tone(70, 1.2, { type:'sine', vol:.5, slide:35 }); tone(140, .9, { type:'sawtooth', vol:.08, slide:60, t:ac.currentTime + .5 }); },
-    rageOn(){ noise(1, { vol:.6, freq:400 }); tone(110, 1, { type:'sawtooth', vol:.25, slide:40 }); tone(55, 1.2, { type:'square', vol:.12 }); },
-    steal(){ tone(900, .45, { type:'sawtooth', vol:.14, slide:250 }); },
-    refund(){ arp([523, 659, 784, 1046], .06, { type:'triangle', vol:.16 }); },
-    puff(){ noise(.12, { type:'bandpass', freq:1200, vol:.12 }); },
-    darkBurst(){ noise(.7, { vol:.5, freq:250 }); tone(60, .6, { type:'sawtooth', vol:.18, slide:30 }); },
-    secret(){ arp([196, 233, 277, 330, 415, 494, 587], .07, { type:'sawtooth', vol:.1, dur:.3 }); },
-    bossHit(){ if (!ac) return; const n = ac.currentTime; if (n - lastHit < .05) return; lastHit = n; tone(1300 + Math.random()*300, .035, { vol:.05 }); },
+    tele(){ if (samp('tele', .5, { vary:.1 })) return; arp([440, 660], .12, { type:'triangle', vol:.12, dur:.14 }); },
+    intro(){ if (!ac) return; samp('intro', .8, { rate:.8 }); noise(1.4, { vol:.55, freq:180 }); tone(70, 1.2, { type:'sine', vol:.5, slide:35 }); tone(140, .9, { type:'sawtooth', vol:.08, slide:60, t:ac.currentTime + .5 }); },
+    rageOn(){ samp('rage', .6, { rate:.85 }); noise(1, { vol:.6, freq:400 }); tone(110, 1, { type:'sawtooth', vol:.25, slide:40 }); tone(55, 1.2, { type:'square', vol:.12 }); },
+    steal(){ if (samp('steal', .55)) return; tone(900, .45, { type:'sawtooth', vol:.14, slide:250 }); },
+    refund(){ if (samp('refund', .55)) return; arp([523, 659, 784, 1046], .06, { type:'triangle', vol:.16 }); },
+    puff(){ if (samp('puff', .4, { vary:.15 })) return; noise(.12, { type:'bandpass', freq:1200, vol:.12 }); },
+    darkBurst(){ if (samp('dark', .85, { rate:.8 })){ tone(60, .5, { type:'sawtooth', vol:.1, slide:30 }); return; } noise(.7, { vol:.5, freq:250 }); tone(60, .6, { type:'sawtooth', vol:.18, slide:30 }); },
+    secret(){ samp('secret', .6, { rate:.7 }); arp([196, 233, 277, 330, 415, 494, 587], .07, { type:'sawtooth', vol:.1, dur:.3 }); },
+    bossHit(){ if (!ac) return; const n = ac.currentTime; if (n - lastHit < .07) return; lastHit = n; if (samp(['bhit1','bhit2'], .18, { vary:.25 })) return; tone(1300 + Math.random()*300, .035, { vol:.05 }); },
     shoot(){ tone(1900, .025, { vol:.012 }); },
-    bossDie(){ noise(1.2, { vol:.6, freq:500 }); arp([523, 659, 784, 1046, 1318, 1568], .08, { type:'triangle', vol:.18, dur:.25 }); },
-    level(){ arp([440, 554, 659, 880], .09, { type:'square', vol:.08, dur:.2 }); },
-    over(){ arp([440, 370, 311, 220], .2, { type:'sawtooth', vol:.12, dur:.35 }); },
+    bossDie(){ samp('bdie', .8, { rate:.7 }); noise(1.2, { vol:.6, freq:500 }); arp([523, 659, 784, 1046, 1318, 1568], .08, { type:'triangle', vol:.18, dur:.25 }); },
+    level(){ if (samp('level', .6)) return; arp([440, 554, 659, 880], .09, { type:'square', vol:.08, dur:.2 }); },
+    over(){ if (samp('over', .6)) return; arp([440, 370, 311, 220], .2, { type:'sawtooth', vol:.12, dur:.35 }); },
   };
 })();
 
@@ -1301,4 +1322,6 @@ $('quitBtn').addEventListener('click', () => { if (S){ S.run = false; S.paused =
 const muteBtn = $('muteBtn');
 muteBtn.classList.toggle('muted', Sound.muted);
 muteBtn.addEventListener('click', () => { Sound.init(); muteBtn.classList.toggle('muted', Sound.toggle()); });
+/* menu clicks: soft UI sound on any button inside a menu screen */
+document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('.overlay button, .overlay select'); if (b){ Sound.init(); Sound.click(); } }, true);
 })();
