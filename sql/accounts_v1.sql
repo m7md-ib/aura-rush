@@ -46,10 +46,13 @@ alter table auth_events enable row level security;
 alter table achievements enable row level security;
 
 -- ---------- helpers (not callable by clients) ----------
+-- cf-connecting-ip is set by Cloudflare and can't be spoofed (a client-sent one is rejected).
+-- The FIRST x-forwarded-for entry is client-controlled, so only the last one is used as a fallback.
 create or replace function _ip() returns text language sql stable set search_path = public as $$
   select coalesce(
-    nullif(split_part(coalesce(current_setting('request.headers', true)::json->>'x-forwarded-for', ''), ',', 1), ''),
-    current_setting('request.headers', true)::json->>'cf-connecting-ip', 'unknown');
+    nullif(current_setting('request.headers', true)::json->>'cf-connecting-ip', ''),
+    nullif(btrim((regexp_match(coalesce(current_setting('request.headers', true)::json->>'x-forwarded-for', ''), '([^,]*)$'))[1]), ''),
+    'unknown');
 $$;
 
 create or replace function _hash_token(p text) returns text language sql immutable set search_path = public as $$
@@ -114,7 +117,7 @@ begin
   return v_new;
 end; $$;
 
-create or replace function _title_for(p_ach text) returns text language sql immutable as $$
+create or replace function _title_for(p_ach text) returns text language sql immutable set search_path = public as $$
   select case p_ach
     when 'first' then 'جديد بالحارة' when 'combo50' then 'ماكينة كومبو' when 'sigma' then 'سيغما'
     when 'untouch' then 'ما بنلمس' when 'slayer' then 'قاتل الزعماء' when 'survivor' then 'ناجي من الكرنج'
