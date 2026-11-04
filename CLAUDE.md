@@ -27,7 +27,7 @@ Gameplay summary:
 - `profile.html` — `/profile?u=name`: stats, achievements, recent runs, equipped frame/banner/name/outfit.
 - `vercel.json` — `{"cleanUrls":true}`. `.vercelignore` keeps `CLAUDE.md` and `sql/` off the public site.
 - `assets/sfx/*.mp3` — 26 Kenney CC0 sound effects (license in `assets/sfx/LICENSE-kenney.txt`). Every SFX falls back to the synth if its file fails to load.
-- `sql/accounts_v1.sql`, `sql/shop_v1.sql` — both **applied** to Supabase on 2026-11-04. `shop_v1` re-creates signup, login, me, import_legacy_achievements, submit_score_v3 and get_profile, so it holds the current version of those.
+- `sql/accounts_v1.sql`, `sql/shop_v1.sql`, `sql/season_v1.sql` — all **applied** to Supabase on 2026-11-04, in that order. Later files re-create some earlier functions: the current version of a function is in the last file that defines it (`season_v1` holds me, get_shop, buy_item, get_leaderboard_v4, get_my_rank_v3, get_profile).
 
 ## Git & deploy
 - GitHub repo: https://github.com/m7md-ib/aura-rush (branch `main`). The local folder is a git clone of it.
@@ -41,7 +41,10 @@ Gameplay summary:
 - Client IP for rate limits comes from `cf-connecting-ip`. The first `x-forwarded-for` entry is client-controlled — never trust it.
 - Tables: `runs` (+ account_id, near), `challenges`, `accounts` (+ coins, streak, last_daily), `sessions`, `auth_events`, `achievements`, `items` (shop catalog — change prices here), `inventory`, `equipped`, `coin_ledger` (unique per account/reason/ref, so each reward pays once).
 - Score validation (all submit functions): level/bosses/duration checks, "too fast" if duration < 25*(level-1), `aura_score_cap(duration, bosses)`, 10s rate limit, character + title allow-lists.
-- RPCs the current client uses: `signup`, `login`, `logout`, `reset_password`, `change_password` (no UI yet), `me`, `import_legacy_achievements`, `submit_score_v3`, `get_leaderboard_v4`, `get_my_rank_v3`, `get_profile`, `get_stats`, `create_challenge`, `get_challenge`, `get_shop`, `buy_item`, `equip_item`, `claim_daily`, `claim_weekly`.
+- RPCs the current client uses: `signup`, `login`, `logout`, `reset_password`, `change_password` (no UI yet), `me`, `import_legacy_achievements`, `submit_score_v3`, `get_leaderboard_v4`, `get_my_rank_v3`, `get_profile`, `get_stats`, `create_challenge`, `get_challenge`, `get_shop`, `buy_item`, `equip_item`, `claim_daily`, `claim_weekly`, `claim_season`, `get_season`.
+- Leaderboard periods (`get_leaderboard_v4`, `get_my_rank_v3`): `all`, `week` (rolling 7 days), `season` (current calendar month, Amman).
+- Daily deals: `_deals(date)` picks 4 buyable items by md5(id || date), 30% off; `buy_item` charges the deal price that day.
+- Seasons = calendar months (Amman). `claim_season` (called by the client on load) pays last month's top 50 once (`season_awards`): #1 2000 + `season_crown`, top 3 1200 + `bn_season`, top 10 600 + `fr_season`, top 50 200.
 - Old RPCs kept only for old cached clients: `submit_score`, `get_leaderboard_v2`, `get_my_rank`, `get_leaderboard_v3`. Drop them in a later migration.
 - Economy (all server-side, accounts only): run coins = score/100, max 80 per run and 400 per day (Amman day); achievement coins 50–1000, once each; daily reward 20 → 80 with a 7-day streak; last week's top 10 (Mon–Sun, Amman): 500 / 300 / 150.
 - `"character"` is a reserved word — always quote it in SQL.
@@ -55,10 +58,10 @@ Gameplay summary:
 6. Before shipping, play-test with Playwright: start a run, check there are no console errors, check boss flow, and check mobile touch.
 
 ## Status
-- **Live since 2026-11-04:** sound update; Phase 1 accounts (everything below); Phase 2 coins + cosmetic shop (27 items; 4 achievement-exclusive: `og_crown`/legend, `nm_king`/king, `fr_slayer`/slayer, `bn_hunter`/hunter).
-- **Still to do:** drop the old RPCs listed above in a later migration; optional change-password UI; Phase 3.
+- **Live since 2026-11-04:** sound update; Phase 1 accounts (everything below); Phase 2 coins + cosmetic shop (30 items; achievement-exclusive: `og_crown`/legend, `nm_king`/king, `fr_slayer`/slayer, `bn_hunter`/hunter; season-exclusive: `season_crown`, `bn_season`, `fr_season`); Phase 3 daily deals + monthly seasons (first season: November 2026).
+- **Still to do:** drop the old RPCs listed above in a later migration (wait a few days after 2026-11-04); optional change-password UI; battle pass (maybe, later).
 
-## Original plan (Phases 1–2 done; kept for reference)
+## Original plan (Phases 1–3 done except the battle pass; kept for reference)
 
 ### Phase 1 — Accounts (username + password only, no email)
 1. **Apply `sql/accounts_v1.sql`** in Supabase (SQL Editor, or Supabase MCP/CLI if available). It only adds things:
