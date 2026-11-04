@@ -51,6 +51,10 @@ h2 small{font-family:var(--body);font-size:14px;color:var(--muted);font-weight:8
 .achs li.got b{color:var(--gold)}
 .achs span{display:block;font-size:12px;color:var(--muted)}
 .achs i{display:block;font-style:normal;font-size:12px;font-weight:800;color:var(--text);margin-top:3px}
+.trophies{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0}
+.trophies li{display:flex;align-items:center;gap:8px;background:var(--ink2);border:1px solid var(--line);border-radius:999px;padding:6px 14px 6px 10px;font-weight:800}
+.trophies li.gold{border-color:var(--gold)} .trophies li.silver{border-color:#cfc8ea} .trophies li.bronze{border-color:#e59a5c}
+.trophies b{font-size:18px} .trophies i{font-style:normal;color:var(--gold);font-family:var(--display);font-size:18px}
 .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--ink2)}
 table{width:100%;border-collapse:collapse;min-width:420px}
 th{font-size:12px;font-weight:800;color:var(--muted);text-align:start;padding:10px 12px;border-bottom:1px solid var(--line)}
@@ -139,6 +143,17 @@ function render(p){
    [playtime(p.playtime), 'وقت اللعب'], [CHARS[p.fav_character] || '–', 'الشخصية المفضلة']
   ].forEach(([val, lbl, hi]) => { const s = el('div', 'stat' + (hi ? ' hi' : '')); s.append(el('b', '', val), el('span', '', lbl)); stats.append(s); });
   box.append(stats);
+
+  if ((p.seasons || []).length){
+    const MONTHS = ['كانون الثاني','شباط','آذار','نيسان','أيار','حزيران','تموز','آب','أيلول','تشرين الأول','تشرين الثاني','كانون الأول'];
+    const ss = el('section'); ss.append(el('h2', '', 'كؤوس المواسم'));
+    const ul = el('ul', 'trophies');
+    p.seasons.forEach(s => { const m = /^(\d{4})-(\d{2})$/.exec(s.season || ''); if (!m) return;
+      const li = el('li', s.rank === 1 ? 'gold' : s.rank <= 3 ? 'silver' : s.rank <= 10 ? 'bronze' : '');
+      li.append(el('b', '', s.rank === 1 ? '🏆' : s.rank <= 3 ? '🥈' : s.rank <= 10 ? '🥉' : '🎖️'), el('span', '', 'موسم ' + MONTHS[+m[2] - 1] + ' ' + m[1]), el('i', '', '#' + s.rank));
+      ul.append(li); });
+    ss.append(ul); box.append(ss);
+  }
 
   const got = new Map((p.achievements || []).map(a => [a.id, a.at]));
   const as = el('section'); const h2 = el('h2', '', 'الإنجازات '); h2.append(el('small', '', got.size + ' من ' + ACH.length)); as.append(h2);

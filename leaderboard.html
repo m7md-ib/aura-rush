@@ -68,6 +68,8 @@ tr.me td.n::after{content:" (إنت)";color:var(--cyan);font-weight:700}
 a.pl{color:inherit;text-decoration:none}
 a.pl:hover,a.pl:focus-visible{color:var(--cyan);text-decoration:underline;outline:none}
 .legend{color:var(--muted);font-size:13px;margin:0}
+.season{background:linear-gradient(135deg,rgba(176,108,255,.18),rgba(61,220,132,.08));border:1px solid #b06cff;border-radius:14px;padding:12px 16px;font-weight:700;line-height:1.7}
+.season b{color:var(--gold);font-family:var(--display);font-weight:400;font-size:20px}
 </style>
 </head>
 <body>
@@ -93,10 +95,12 @@ a.pl:hover,a.pl:focus-visible{color:var(--cyan);text-decoration:underline;outlin
     <div class="tabs" role="group" aria-label="الفترة">
       <button id="tAll" aria-pressed="true">كل الأوقات</button>
       <button id="tWeek" aria-pressed="false">هالأسبوع</button>
+      <button id="tSeason" aria-pressed="false">هالموسم</button>
     </div>
     <span class="updated" id="updated">عم نحمّل...</span>
   </div>
 
+  <div class="season" id="seasonBox" hidden></div>
   <div class="mine" id="mine" hidden></div>
 
   <section class="podium" id="podium"></section>
@@ -120,6 +124,17 @@ async function rpc(fn, body){
 }
 let me = null, token = null; try { me = JSON.parse(localStorage.getItem('auraPlayer')); token = JSON.parse(localStorage.getItem('auraToken')); } catch(e){}
 let period = 'all';
+try { const p = new URLSearchParams(location.search).get('p'); if (p === 'week' || p === 'season') period = p; } catch(e){}
+const MONTHS = ['كانون الثاني','شباط','آذار','نيسان','أيار','حزيران','تموز','آب','أيلول','تشرين الأول','تشرين الثاني','كانون الأول'];
+let season = null;
+function renderSeason(){
+  const box = $('seasonBox'); box.hidden = period !== 'season' || !season; if (box.hidden) return;
+  const m = /^(\d{4})-(\d{2})$/.exec(season.id), ms = new Date(season.ends).getTime() - Date.now();
+  const d = Math.floor(ms/86400e3), h = Math.floor(ms % 86400e3 / 3600e3);
+  box.textContent = '';
+  box.append(el('b', '', '🏆 موسم ' + (m ? MONTHS[+m[2] - 1] + ' ' + m[1] : '')), document.createTextNode(' · ' + (ms <= 0 ? 'خلص' : 'باقي ' + (d >= 1 ? d + ' يوم و' + h + ' ساعة' : h + ' ساعة'))),
+    el('br'), document.createTextNode('الأول: 2,000 عملة + تاج بطل الموسم · أول 3: 1,200 + غلاف حصري · أول 10: 600 + إطار حصري · أول 50: 200 عملة. الجوايز للحسابات المسجّلة.'));
+}
 const CHARS = { sigma:'Sigma', menace:'The Menace', magnet:'The Magnet', ghost:'The Ghost', gambler:'The Gambler' };
 const fmt = n => Number(n || 0).toLocaleString('en-US');
 function ago(ts){
@@ -162,11 +177,13 @@ function render(rows){
   });
   const note = $('note');
   note.hidden = rows.length > 0;
-  note.textContent = period === 'week' ? 'ما حدا لعب هالأسبوع لسا. كون أول واحد.' : 'العرش فاضي. العب وكون أول ملك.';
+  note.textContent = period === 'week' ? 'ما حدا لعب هالأسبوع لسا. كون أول واحد.' : period === 'season' ? 'ما حدا لعب هالموسم لسا. كون أول بطل.' : 'العرش فاضي. العب وكون أول ملك.';
 }
 
 async function load(){
   try {
+    if (!season) rpc('get_season', {}).then(s => { season = s; renderSeason(); }).catch(() => {});
+    renderSeason();
     const [rows, stats, mine] = await Promise.all([
       rpc('get_leaderboard_v4', { p_limit:100, p_player:me, p_period:period, p_token:token }),
       rpc('get_stats', {}),
@@ -182,10 +199,11 @@ async function load(){
     $('updated').textContent = 'ما قدرنا نجيب اللوحة. جرّب كمان شوي.';
   }
 }
-function setPeriod(p){ period = p; $('tAll').setAttribute('aria-pressed', p === 'all'); $('tWeek').setAttribute('aria-pressed', p === 'week'); load(); }
+function setPeriod(p){ period = p; $('tAll').setAttribute('aria-pressed', p === 'all'); $('tWeek').setAttribute('aria-pressed', p === 'week'); $('tSeason').setAttribute('aria-pressed', p === 'season'); load(); }
 $('tAll').addEventListener('click', () => setPeriod('all'));
 $('tWeek').addEventListener('click', () => setPeriod('week'));
-load(); setInterval(load, 30000);
+$('tSeason').addEventListener('click', () => setPeriod('season'));
+setPeriod(period); setInterval(load, 30000);
 })();
 </script>
 </body>

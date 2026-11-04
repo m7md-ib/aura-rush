@@ -254,6 +254,10 @@ const Acct = {
   async weekly(){
     if (this.weeklyDone || !this.signedIn) return; this.weeklyDone = true;
     try { const w = await rpc('claim_weekly', { p_token:this.token }); if (w && w.reward > 0){ this.setCoins(w.coins); note('مبروك! طلعت #' + w.rank + ' الأسبوع الماضي: +' + w.reward + ' عملة'); } } catch(e){}
+    /* last month's season: top 50 get coins, top 10 also get exclusive items */
+    try { const s = await rpc('claim_season', { p_token:this.token });
+      if (s && s.reward > 0){ this.setCoins(s.coins);
+        note('🏆 خلص موسم ' + seasonName(s.season) + ' وطلعت #' + s.rank + '! +' + s.reward + ' عملة' + (s.items && s.items.length ? ' وأغراض حصرية بالمتجر' : '')); } } catch(e){}
   },
   /* who am I + achievements. First run after this update: import the achievements this device earned before accounts existed. */
   async sync(){
@@ -266,6 +270,7 @@ const Acct = {
       const m = await rpc('me', { p_token:this.token, p_player:UID });
       if (this.token && !m.signed_in) this.set(null);
       else if (m.signed_in && m.username !== this.user) this.set(this.token, m.username);
+      if (m.season){ this.season = m.season; renderSeason(); }
       if (m.signed_in){ this.eq = m.equipped || {}; this.dailyReady = !!m.daily_ready; this.streak = m.streak || 0; this.setCoins(m.coins || 0); this.weekly(); }
       Ach.setServer(m.achievements);
     } catch(e){}
@@ -447,6 +452,17 @@ renderAcct();
 /* one-line message on the start screen (rewards etc.) */
 function note(txt){ const n = $('rewardNote'); n.textContent = txt; n.hidden = !txt; }
 
+/* ---------- monthly season (calendar month, Amman time) ---------- */
+const MONTHS = ['كانون الثاني','شباط','آذار','نيسان','أيار','حزيران','تموز','آب','أيلول','تشرين الأول','تشرين الثاني','كانون الأول'];
+function seasonName(id){ const m = /^(\d{4})-(\d{2})$/.exec(id || ''); return m ? MONTHS[+m[2] - 1] + ' ' + m[1] : ''; }
+function renderSeason(){
+  const s = Acct.season; if (!s) return;
+  const ms = new Date(s.ends).getTime() - Date.now(), d = Math.floor(ms/86400e3), h = Math.floor(ms % 86400e3 / 3600e3);
+  $('seasonLine').hidden = false;
+  $('seasonName').textContent = 'موسم ' + seasonName(s.id);
+  $('seasonLeft').textContent = ms <= 0 ? 'خلص' : 'باقي ' + (d >= 1 ? d + ' يوم' : h + ' ساعة');
+}
+
 /* ---------- daily reward ---------- */
 $('dailyBtn').addEventListener('click', async () => {
   const b = $('dailyBtn'); b.disabled = true;
@@ -471,7 +487,7 @@ async function openShop(){
   $('shopLogin').hidden = Acct.signedIn; $('shopCoins').parentElement.hidden = !Acct.signedIn;
   $('shopGrid').textContent = ''; $('shopGrid').append(Object.assign(document.createElement('p'), { className:'empty', textContent:'عم نحمّل المتجر...' }));
   renderShopTabs();
-  try { const d = await rpc('get_shop', { p_token:Acct.token }); Shop.items = (d && d.items) || []; if (d && d.coins != null) Acct.setCoins(d.coins); }
+  try { const d = await rpc('get_shop', { p_token:Acct.token }); Shop.items = (d && d.items) || []; Shop.dealsEnd = d && d.deals_end; if (d && d.coins != null) Acct.setCoins(d.coins); }
   catch(e){ $('shopGrid').textContent = ''; $('shopGrid').append(Object.assign(document.createElement('p'), { className:'empty', textContent:'ما قدرنا نفتح المتجر. جرّب كمان شوي.' })); return; }
   renderShop();
   $('shopBack').focus({ preventScroll:true });
@@ -482,12 +498,31 @@ function renderShopTabs(){
   AuraCos.TABS.forEach(tb => { const b = document.createElement('button'); b.type = 'button'; b.textContent = tb.name; b.setAttribute('aria-pressed', String(tb.id === Shop.tab));
     b.addEventListener('click', () => { Shop.tab = tb.id; renderShopTabs(); renderShop(); }); el.appendChild(b); });
 }
+/* "today's deals": 4 items, 30% off, same for everyone, rotate at midnight Amman time */
+function dealsLeft(){
+  const ms = Shop.dealsEnd ? new Date(Shop.dealsEnd).getTime() - Date.now() : 0;
+  if (ms <= 0) return 'بتتغيّر هلأ';
+  const h = Math.floor(ms/3600e3), m = Math.floor(ms % 3600e3 / 60e3);
+  return 'بتتغيّر بعد ' + (h ? h + ' س ' : '') + m + ' د';
+}
 function renderShop(){
   stopShopAnim();
+  const deals = Shop.items.filter(it => it.deal_price);
+  $('dealsBox').hidden = !deals.length; $('dealsLeft').textContent = dealsLeft();
+  $('dealsGrid').textContent = ''; deals.forEach(it => shopCard(it, $('dealsGrid'), true));
   const grid = $('shopGrid'); grid.textContent = '';
   const slots = AuraCos.TABS.find(tb => tb.id === Shop.tab).slots;
-  Shop.items.filter(it => slots.includes(it.slot)).forEach(it => {
-    const card = document.createElement('div'); card.className = 'item r-' + it.rarity + (it.equipped ? ' on' : '');
+  Shop.items.filter(it => slots.includes(it.slot)).forEach(it => shopCard(it, grid, false));
+  if (Shop.frames.length){
+    let lastT = 0;
+    const tick = now => { const t = now/1000, dt = Math.min(.05, lastT ? t - lastT : .016); lastT = t; Shop.frames.forEach(f => f(t, dt)); Shop.anim = requestAnimationFrame(tick); };
+    Shop.anim = requestAnimationFrame(tick);
+  }
+}
+function shopCard(it, grid, deal){
+  {
+    const card = document.createElement('div'); card.className = 'item r-' + it.rarity + (it.equipped ? ' on' : '') + (deal ? ' deal' : '');
+    const price = it.deal_price || it.price;
     let pv;
     if (it.slot === 'name'){ pv = document.createElement('div'); pv.className = 'pv pv-name'; const s = document.createElement('span'); s.className = AuraCos.nameClass(it.id); s.textContent = Acct.user || 'اسمك'; pv.appendChild(s); }
     else if (it.slot === 'frame' || it.slot === 'banner'){ pv = document.createElement('div'); pv.className = 'pv pv-sw ' + (it.slot === 'frame' ? 'pv-frame fr-' : 'bn-') + it.id.replace(/^(fr|bn)_/, ''); }
@@ -496,17 +531,15 @@ function renderShop(){
     const rar = document.createElement('span'); rar.className = 'rar'; rar.textContent = AuraCos.RARITY[it.rarity].name + ' · ' + AuraCos.SLOTS[it.slot];
     const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'ibtn';
     if (it.owned){ btn.textContent = it.equipped ? 'اشلحه' : 'البسه'; btn.classList.add(it.equipped ? 'off' : 'wear'); btn.addEventListener('click', () => equip(it, btn)); }
-    else if (it.price == null){ const a = ACH.find(x => x.id === it.unlock_ach); btn.textContent = 'حصري: ' + (a ? a.name : 'إنجاز'); btn.disabled = true; btn.classList.add('locked'); }
-    else { btn.innerHTML = ''; btn.append(Object.assign(document.createElement('i'), { className:'coin' }), document.createTextNode(' ' + it.price.toLocaleString('en-US'))); btn.classList.add('price');
-      if (Acct.signedIn && Acct.coins < it.price) btn.classList.add('poor');
+    else if (it.price == null){ const a = ACH.find(x => x.id === it.unlock_ach); btn.textContent = it.unlock_ach === 'season' ? 'حصري: أبطال الموسم' : 'حصري: ' + (a ? a.name : 'إنجاز'); btn.disabled = true; btn.classList.add('locked'); }
+    else { btn.innerHTML = ''; btn.append(Object.assign(document.createElement('i'), { className:'coin' }), document.createTextNode(' ' + price.toLocaleString('en-US')));
+      if (it.deal_price) btn.append(Object.assign(document.createElement('s'), { textContent:it.price.toLocaleString('en-US') }));
+      btn.classList.add('price');
+      if (Acct.signedIn && Acct.coins < price) btn.classList.add('poor');
       btn.addEventListener('click', () => buy(it, btn)); }
+    if (it.deal_price && !it.owned) card.append(Object.assign(document.createElement('span'), { className:'off-tag', textContent:'−30%' }));
     card.append(pv, nm, rar, btn); grid.appendChild(card);
     if (pv.tagName === 'CANVAS') Shop.frames.push(AuraCos.preview(pv, it));
-  });
-  if (Shop.frames.length){
-    let lastT = 0;
-    const tick = now => { const t = now/1000, dt = Math.min(.05, lastT ? t - lastT : .016); lastT = t; Shop.frames.forEach(f => f(t, dt)); Shop.anim = requestAnimationFrame(tick); };
-    Shop.anim = requestAnimationFrame(tick);
   }
 }
 async function buy(it, btn){

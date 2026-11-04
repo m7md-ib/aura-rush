@@ -79,6 +79,26 @@ window.AuraCos = (() => {
       ctx.beginPath(); ctx.ellipse(x - r*.85, y - r*.36, r*.62, r*.15, -.08, 0, 7); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y - r*1.26, r*.1, 0, 7); ctx.fill();
     }
+    if (eq.head === 'season_crown'){
+      /* season champion: violet-silver crown inside a laurel wreath, with a pulsing star */
+      const base = y - r*.8, top = base - r*.75, w = r*1.3;
+      ctx.strokeStyle = '#3ddc84'; ctx.lineWidth = Math.max(1.5, r*.1); ctx.lineCap = 'round';
+      [-1, 1].forEach(sd => {
+        ctx.beginPath(); ctx.arc(x, y - r*.2, r*1.12, sd < 0 ? Math.PI*1.05 : Math.PI*1.95, sd < 0 ? Math.PI*1.4 : Math.PI*1.6, sd > 0); ctx.stroke();
+        for (let i = 0; i < 3; i++){ const a = sd < 0 ? Math.PI*(1.1 + i*.1) : Math.PI*(1.9 - i*.1);
+          ctx.fillStyle = '#3ddc84'; ctx.beginPath(); ctx.ellipse(x + Math.cos(a)*r*1.12, y - r*.2 + Math.sin(a)*r*1.12, r*.16, r*.07, a + Math.PI/2, 0, 7); ctx.fill(); }
+      });
+      const g = ctx.createLinearGradient(x, top, x, base);
+      g.addColorStop(0, '#f2e9ff'); g.addColorStop(1, '#9d6bff');
+      ctx.fillStyle = g; ctx.shadowColor = '#b06cff'; ctx.shadowBlur = 14;
+      ctx.beginPath(); ctx.moveTo(x - w/2, base); ctx.lineTo(x - w/2, top + r*.25); ctx.lineTo(x - w/4, base - r*.3); ctx.lineTo(x, top);
+      ctx.lineTo(x + w/4, base - r*.3); ctx.lineTo(x + w/2, top + r*.25); ctx.lineTo(x + w/2, base); ctx.closePath(); ctx.fill(); ctx.shadowBlur = 0;
+      const sr = r*(.16 + .04*Math.sin(t*5));
+      ctx.fillStyle = '#ffe28a'; ctx.beginPath();
+      for (let i = 0; i < 10; i++){ const a = -Math.PI/2 + i*Math.PI/5, rad = i % 2 ? sr*.45 : sr; ctx.lineTo(x + Math.cos(a)*rad, top - r*.12 + Math.sin(a)*rad); }
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#6ee7ff'; ctx.beginPath(); ctx.arc(x, base - r*.14, r*.1, 0, 7); ctx.fill();
+    }
     if (eq.head === 'crown' || eq.head === 'og_crown'){
       const og = eq.head === 'og_crown', w = r*(og ? 1.5 : 1.25), base = y - r*.82, top = base - r*(og ? .85 : .65);
       if (og){

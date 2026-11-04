@@ -12,6 +12,11 @@
 .fr-neon{border:3px solid #6ee7ff!important;box-shadow:0 0 18px rgba(110,231,255,.7),inset 0 0 18px rgba(255,95,210,.35)}
 .fr-slayer{border:3px solid #ff3b3b!important;box-shadow:0 0 28px rgba(255,59,59,.5),inset 0 0 0 3px rgba(255,201,77,.6)}
 
+.fr-season{border:3px solid #b06cff!important;box-shadow:0 0 0 3px rgba(61,220,132,.55),0 0 30px rgba(176,108,255,.55)}
+.bn-season{background:
+  radial-gradient(circle at 85% 30%,rgba(255,226,138,.55) 0 6%,transparent 7%),
+  repeating-conic-gradient(from 0deg at 85% 30%,rgba(255,255,255,.07) 0 8deg,transparent 8deg 22deg),
+  linear-gradient(135deg,#2a0f4d,#5b2a86 55%,#1d5c3b)!important}
 .bn-city{background:
   repeating-linear-gradient(90deg,transparent 0 22px,rgba(255,201,77,.18) 22px 26px,transparent 26px 40px) bottom/100% 38% no-repeat,
   linear-gradient(0deg,#0d0a24 0 22%,transparent 22%),
