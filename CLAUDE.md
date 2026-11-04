@@ -19,39 +19,31 @@ Gameplay summary:
 - Challenge links: `/?c=code`.
 
 ## Files (repo root)
-- `index.html` — page shell + all CSS + HTML screens (overlays). Loads `game.js` with `defer`.
-- `game.js` — all game logic (~1,400 lines): LEVELS, SECRETS, ASCENSION, CHARS, ACH/Ach, Sound (WebAudio synth music + sample SFX), Supabase `rpc()`, Board, Challenge, Input, Perf, update/draw loop.
-- `leaderboard.html` — top-100 page ("عرش الـAURA") with podium, stats, all-time/week tabs.
-- `vercel.json` — `{"cleanUrls":true}`.
+- `index.html` — page shell + all CSS + HTML screens (overlays: start, account, shop, achievements, board, pause, game over). Loads `cosmetics.js` then `game.js` with `defer`.
+- `game.js` — all game logic: LEVELS, SECRETS, ASCENSION, CHARS, ACH/Ach (server-granted; local fallback when offline), Sound, Supabase `rpc()`, Acct (session token, coins, equipped items), Board (leaderboard v4), Challenge, account screen, daily reward, Shop, Input, Perf, update/draw loop.
+- `cosmetics.js` — `window.AuraCos`: canvas drawing for outfits, trails, FLEX effects, animated shop previews, profile avatar. Visual only.
+- `cosmetics.css` — name effects (`nm-*`), profile frames (`fr-*`) and banners (`bn-*`). Used by index, leaderboard and profile.
+- `leaderboard.html` — top-100 page ("عرش الـAURA"): ✓ badge, name effects, links to profiles.
+- `profile.html` — `/profile?u=name`: stats, achievements, recent runs, equipped frame/banner/name/outfit.
+- `vercel.json` — `{"cleanUrls":true}`. `.vercelignore` keeps `CLAUDE.md` and `sql/` off the public site.
 - `assets/sfx/*.mp3` — 26 Kenney CC0 sound effects (license in `assets/sfx/LICENSE-kenney.txt`). Every SFX falls back to the synth if its file fails to load.
-- `sql/accounts_v1.sql` — accounts migration, **NOT applied yet** (see "Next work").
+- `sql/accounts_v1.sql`, `sql/shop_v1.sql` — both **applied** to Supabase on 2026-11-04. `shop_v1` re-creates signup, login, me, import_legacy_achievements, submit_score_v3 and get_profile, so it holds the current version of those.
 
 ## Git & deploy
-- GitHub repo: https://github.com/m7md-ib/aura-rush (branch `main`).
-- Vercel project `aura-rush` (team `m7mds-projects-1991906d`, project id `prj_PcObgGInY24vAJGZUAKQnvZ4hgR7`) is connected to the repo: **every push to `main` deploys to production automatically.** Pushes to other branches create preview deployments.
-- **The local folder is NOT a git repo yet** (files were uploaded through the GitHub website). First task: connect it without losing local changes:
-  ```
-  git init
-  git remote add origin https://github.com/m7md-ib/aura-rush.git
-  git fetch origin
-  git checkout -b main
-  git reset origin/main
-  git status
-  ```
-  `git status` will then show local changes not yet on GitHub. Expected: the sound update (`game.js`, `README.md`, `assets/sfx/*.mp3`) unless Muhammad already uploaded it, plus `sql/` and this `CLAUDE.md`. Review the diff and show him before committing.
+- GitHub repo: https://github.com/m7md-ib/aura-rush (branch `main`). The local folder is a git clone of it.
+- Vercel project `aura-rush` (team `m7mds-projects-1991906d`, project id `prj_PcObgGInY24vAJGZUAKQnvZ4hgR7`): **every push to `main` deploys to production automatically.** Other branches get preview deployments. Previews are protected: make a 23-hour share link for Muhammad with the Vercel MCP `get_access_to_vercel_url`.
 
 ## Backend: Supabase
 - Project `aura-rush`, id `neciihvhzlxqijgfddmw`, URL `https://neciihvhzlxqijgfddmw.supabase.co`.
 - Client uses the **publishable** key (`sb_publishable_JLUNUppVVhSm5wglgE7QdA_klJ6Jdgt`, already in `game.js`) and calls RPCs: `POST /rest/v1/rpc/<fn>` with header `apikey`.
 - **Never ask for, store, or commit the `service_role` / secret key.**
-- Security model: tables have RLS on with no policies; all access goes through `SECURITY DEFINER` functions with `set search_path`.
-- Live schema today:
-  - `runs` (id, player_id uuid, nick, score, level, bosses, duration_s, created_at, "character", title)
-  - `challenges` (code pk, player_id unique, created_at)
-- Live functions:
-  - `aura_score_cap(duration, bosses)`.
-  - `submit_score(uuid,text,int,int,int,int,text,text)`: validates level/bosses/duration, "too fast" if duration < 25*(level-1), the score cap, a 10s rate limit, and the character and title allow-lists.
-  - `get_leaderboard_v2`, `get_my_rank`, `get_stats`, `create_challenge`, `get_challenge`.
+- Security model: tables have RLS on with no policies; all access goes through `SECURITY DEFINER` functions with `set search_path`. Internal helpers start with `_` and have EXECUTE revoked from anon/authenticated.
+- Client IP for rate limits comes from `cf-connecting-ip`. The first `x-forwarded-for` entry is client-controlled — never trust it.
+- Tables: `runs` (+ account_id, near), `challenges`, `accounts` (+ coins, streak, last_daily), `sessions`, `auth_events`, `achievements`, `items` (shop catalog — change prices here), `inventory`, `equipped`, `coin_ledger` (unique per account/reason/ref, so each reward pays once).
+- Score validation (all submit functions): level/bosses/duration checks, "too fast" if duration < 25*(level-1), `aura_score_cap(duration, bosses)`, 10s rate limit, character + title allow-lists.
+- RPCs the current client uses: `signup`, `login`, `logout`, `reset_password`, `change_password` (no UI yet), `me`, `import_legacy_achievements`, `submit_score_v3`, `get_leaderboard_v4`, `get_my_rank_v3`, `get_profile`, `get_stats`, `create_challenge`, `get_challenge`, `get_shop`, `buy_item`, `equip_item`, `claim_daily`, `claim_weekly`.
+- Old RPCs kept only for old cached clients: `submit_score`, `get_leaderboard_v2`, `get_my_rank`, `get_leaderboard_v3`. Drop them in a later migration.
+- Economy (all server-side, accounts only): run coins = score/100, max 80 per run and 400 per day (Amman day); achievement coins 50–1000, once each; daily reward 20 → 80 with a 7-day streak; last week's top 10 (Mon–Sun, Amman): 500 / 300 / 150.
 - `"character"` is a reserved word — always quote it in SQL.
 
 ## Hard rules
@@ -62,7 +54,11 @@ Gameplay summary:
 5. Keep UI text in Jordanian Arabic and keep RTL working. Test at phone width (360px) and desktop.
 6. Before shipping, play-test with Playwright: start a run, check there are no console errors, check boss flow, and check mobile touch.
 
-## Next work (in order)
+## Status
+- **Live since 2026-11-04:** sound update; Phase 1 accounts (everything below); Phase 2 coins + cosmetic shop (27 items; 4 achievement-exclusive: `og_crown`/legend, `nm_king`/king, `fr_slayer`/slayer, `bn_hunter`/hunter).
+- **Still to do:** drop the old RPCs listed above in a later migration; optional change-password UI; Phase 3.
+
+## Original plan (Phases 1–2 done; kept for reference)
 
 ### Phase 1 — Accounts (username + password only, no email)
 1. **Apply `sql/accounts_v1.sql`** in Supabase (SQL Editor, or Supabase MCP/CLI if available). It only adds things:
